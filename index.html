@@ -1,0 +1,756 @@
+    <!DOCTYPE html>
+    <html lang="ja">
+    <head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>新歓期 投稿管理 | AIESEC HI Mkt</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{background:#F5F0E8;font-family:'Noto Sans JP',sans-serif}
+    ::-webkit-scrollbar{width:5px}
+    ::-webkit-scrollbar-track{background:#EDE7D9}
+    ::-webkit-scrollbar-thumb{background:#C4B89A;border-radius:3px}
+    @keyframes slideDown{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    .rh:hover{background:#EDE7D9!important}
+    .bh:hover{opacity:0.8}
+    .kc:hover{box-shadow:3px 3px 0 #111;transform:translate(-1px,-1px)}
+    select,input,button{font-family:'Noto Sans JP',sans-serif}
+    </style>
+    </head>
+    <body>
+    <div id="root"></div>
+    <script type="text/babel">
+    const { useState, useMemo, useEffect, useRef } = React;
+
+    const DEFAULT_MEMBERS = ["こと","かえで","あや","寛太","楓花","めい","はるのすけ","もあな"];
+    const PLATFORMS = ["Instagram","Twitter/X","TikTok","LINE","note","YouTube"];
+    const STATUSES  = ["未着手","作成中","確認待ち","MCチェック提出済","MCFBもらった","完成","投稿済み"];
+
+    const SM = {
+    "未着手":          {color:"#8A8070",bg:"#EDE7D9",dot:"#C4B89A"},
+    "作成中":          {color:"#1a6bff",bg:"#E8F0FF",dot:"#1a6bff"},
+    "確認待ち":        {color:"#7C3ABD",bg:"#F3EEFF",dot:"#7C3ABD"},
+    "MCチェック提出済":{color:"#D4620A",bg:"#FFF0E0",dot:"#D4620A"},
+    "MCFBもらった":    {color:"#0A7C7C",bg:"#E0F5F5",dot:"#0A7C7C"},
+    "完成":            {color:"#1A7A3C",bg:"#E4F5EB",dot:"#2AAF5C"},
+    "投稿済み":        {color:"#111108",bg:"#E8E4DC",dot:"#111108"},
+    };
+    const CM   = {"余裕あり":"#2AAF5C","普通":"#D4A017","やや忙しい":"#D4620A","かなり忙しい":"#B8000F"};
+    const CAPS = Object.keys(CM);
+    const AV_COLORS = ["#1a6bff","#D4620A","#1A7A3C","#B8000F","#6B4FBB","#0A7C7C","#8B4513","#2E7D99","#A0522D","#4A235A","#C2185B","#00796B"];
+
+    const SEED = [
+    {id:1,title:"新歓キックオフ告知",   date:"2026-03-06",creator:"はるのすけ",tlManager:"かえで", platform:"Instagram", status:"作成中",    note:"ビジュアル重視で"},
+    {id:2,title:"AIESEC紹介①",         date:"2026-03-09",creator:"あや",       tlManager:"",       platform:"Instagram", status:"未着手",    note:""},
+    {id:3,title:"OB/OG対談リール",      date:"2026-03-12",creator:"こと",       tlManager:"寛太",   platform:"TikTok",    status:"未着手",    note:""},
+    {id:4,title:"説明会告知",           date:"2026-03-15",creator:"楓花",       tlManager:"めい",   platform:"Twitter/X", status:"未着手",    note:"Xで拡散優先"},
+    {id:5,title:"メンバーインタビュー", date:"2026-03-18",creator:"",           tlManager:"",       platform:"note",      status:"未着手",    note:""},
+    {id:6,title:"最終入会締切リマインド",date:"2026-03-22",creator:"もあな",    tlManager:"あや",   platform:"Instagram", status:"未着手",    note:"ストーリーズも"},
+    ];
+
+    const todayStr  = () => new Date().toISOString().slice(0,10);
+    const daysUntil = d  => Math.ceil((new Date(d) - new Date(todayStr())) / 86400000);
+    const initial   = n  => n ? n.slice(0,1) : "?";
+    const uid       = () => Date.now() + Math.random();
+
+    const ml = {fontSize:9,fontWeight:700,color:"#8A8070",letterSpacing:"0.1em",fontFamily:"'DM Mono',monospace",marginBottom:4};
+    const ss = {background:"#F5F0E8",border:"1.5px solid #C4B89A",borderRadius:1,padding:"7px 9px",fontSize:12,fontFamily:"'Noto Sans JP',sans-serif",fontWeight:500,color:"#111108"};
+    const btnBase = {padding:"7px 14px",borderRadius:1,fontSize:12,cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontWeight:700,transition:"all 0.12s"};
+
+    /* Avatar */
+    function Av({name,members,size=26}){
+    const c = AV_COLORS[members.indexOf(name) % AV_COLORS.length] || "#8A8070";
+    return (
+        <div style={{width:size,height:size,borderRadius:"50%",background:c,color:"#fff",
+        fontSize:size*0.42,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",
+        fontFamily:"'DM Mono',monospace",border:"1.5px solid #111",flexShrink:0}}>
+        {initial(name)}
+        </div>
+    );
+    }
+
+    /* Status Pill — with free dropdown to any status */
+    function SPill({status,onChange}){
+    const [open,setOpen]=useState(false);
+    const ref=useRef(null);
+    const m=SM[status]||SM["未着手"];
+
+    useEffect(()=>{
+        if(!open) return;
+        const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+        document.addEventListener("mousedown",h);
+        return ()=>document.removeEventListener("mousedown",h);
+    },[open]);
+
+    return (
+        <div ref={ref} style={{position:"relative",display:"inline-block"}}>
+        <div onClick={e=>{e.stopPropagation();setOpen(o=>!o)}} style={{
+            display:"inline-flex",alignItems:"center",gap:5,padding:"3px 8px",
+            border:"1.5px solid #111",borderRadius:1,fontSize:10,fontWeight:700,
+            cursor:"pointer",background:m.bg,color:m.color,letterSpacing:"0.04em",
+            fontFamily:"'Noto Sans JP',sans-serif",whiteSpace:"nowrap",
+        }}>
+            <span style={{width:6,height:6,borderRadius:"50%",background:m.dot,display:"inline-block",flexShrink:0}}/>
+            {status}
+            <span style={{fontSize:8,opacity:0.6,marginLeft:2}}>▾</span>
+        </div>
+        {open && (
+            <div onClick={e=>e.stopPropagation()} style={{
+            position:"absolute",top:"100%",left:0,zIndex:200,
+            background:"#F5F0E8",border:"1.5px solid #111",borderRadius:1,
+            marginTop:3,minWidth:160,boxShadow:"3px 3px 0 #111",
+            animation:"slideDown 0.12s ease",
+            }}>
+            {STATUSES.map(s=>(
+                <div key={s} onClick={()=>{onChange(s);setOpen(false);}} className="rh" style={{
+                padding:"8px 12px",fontSize:11,fontWeight:700,cursor:"pointer",
+                color:SM[s].color,borderBottom:"1px solid #E8E2D6",
+                display:"flex",alignItems:"center",gap:6,
+                background:s===status?"#EDE7D9":"transparent",
+                fontFamily:"'Noto Sans JP',sans-serif",
+                }}>
+                <span style={{width:6,height:6,borderRadius:"50%",background:SM[s].dot,display:"inline-block"}}/>
+                {s}
+                {s===status&&<span style={{marginLeft:"auto",fontSize:9,color:"#8A8070"}}>✓</span>}
+                </div>
+            ))}
+            </div>
+        )}
+        </div>
+    );
+    }
+
+    /* Member Select */
+    function MemberSel({value,onChange,members}){
+    return (
+        <select value={value} onChange={e=>onChange(e.target.value)} style={ss}>
+        <option value="">未割当</option>
+        {members.map(m=><option key={m} value={m}>{m}</option>)}
+        </select>
+    );
+    }
+
+    /* List View */
+    function ListView({posts,update,del,searchQ,members}){
+    const [exp,setExp]=useState(null);
+    const fp=useMemo(()=>posts.filter(p=>
+        p.title.includes(searchQ)||p.creator.includes(searchQ)||p.tlManager.includes(searchQ)
+    ),[posts,searchQ]);
+
+    return (
+        <div>
+        <div style={{display:"grid",gridTemplateColumns:"82px 1fr 90px 105px 105px 160px 24px",
+            padding:"6px 14px",borderBottom:"2px solid #111"}}>
+            {["DATE","TITLE","PLATFORM","作成担当","TL管理","STATUS",""].map(h=>(
+            <div key={h} style={{fontSize:9,fontWeight:700,color:"#8A8070",letterSpacing:"0.1em",
+                fontFamily:"'DM Mono',monospace",padding:"0 3px"}}>{h}</div>
+            ))}
+        </div>
+        {fp.length===0&&(
+            <div style={{padding:"40px",textAlign:"center",color:"#C4B89A",fontSize:13}}>投稿が見つかりません</div>
+        )}
+        {fp.map((p,i)=>{
+            const du=daysUntil(p.date);
+            const urgent=du>=0&&du<=3&&!["完成","投稿済み"].includes(p.status);
+            const past=du<0&&p.status!=="投稿済み";
+            const isExp=exp===p.id;
+            return (
+            <div key={p.id} style={{borderBottom:"1px solid #E8E2D6",
+                background:isExp?"#EDE7D9":"transparent",
+                animation:`fadeIn 0.15s ease ${Math.min(i*0.04,0.3)}s both`}}>
+                <div className="rh" onClick={()=>setExp(isExp?null:p.id)} style={{
+                display:"grid",gridTemplateColumns:"82px 1fr 90px 105px 105px 160px 24px",
+                padding:"12px 14px",cursor:"pointer",alignItems:"center",
+                }}>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:11,padding:"0 3px",
+                    color:past?"#C4B89A":urgent?"#D4620A":"#111108",fontWeight:500}}>
+                    {p.date.slice(5).replace("-","/")}
+                    {urgent&&<div style={{fontSize:8,color:"#D4620A",fontWeight:700,marginTop:1}}>{du===0?"🔴 TODAY":`⚡ ${du}日後`}</div>}
+                    {past&&<div style={{fontSize:8,color:"#C4B89A",marginTop:1}}>PAST</div>}
+                </div>
+                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:13,fontWeight:700,
+                    color:past?"#C4B89A":"#111108",padding:"0 3px",overflow:"hidden",
+                    textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.title}</div>
+                <div style={{padding:"0 3px"}}>
+                    <span style={{fontSize:9,fontFamily:"'DM Mono',monospace",color:"#8A8070",
+                    border:"1px solid #C4B89A",padding:"2px 5px",borderRadius:1}}>{p.platform}</span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:5,padding:"0 3px"}}>
+                    {p.creator
+                    ? <><Av name={p.creator} members={members} size={20}/><span style={{fontSize:11,color:"#111108"}}>{p.creator}</span></>
+                    : <span style={{fontSize:11,color:"#C4B89A"}}>—</span>}
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:5,padding:"0 3px"}}>
+                    {p.tlManager
+                    ? <><Av name={p.tlManager} members={members} size={20}/><span style={{fontSize:11,color:"#111108"}}>{p.tlManager}</span></>
+                    : <span style={{fontSize:11,color:"#C4B89A"}}>—</span>}
+                </div>
+                <div style={{padding:"0 3px"}} onClick={e=>e.stopPropagation()}>
+                    <SPill status={p.status} onChange={v=>update(p.id,"status",v)}/>
+                </div>
+                <div style={{textAlign:"center",color:"#8A8070",fontSize:13,
+                    transition:"transform 0.15s",transform:isExp?"rotate(90deg)":"none"}}>›</div>
+                </div>
+                {isExp&&(
+                <div onClick={e=>e.stopPropagation()} style={{
+                    padding:"14px 16px 16px",borderTop:"1px dashed #C4B89A",
+                    display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12,
+                }}>
+                    <div>
+                    <div style={ml}>作成担当</div>
+                    <MemberSel value={p.creator} onChange={v=>update(p.id,"creator",v)} members={members}/>
+                    </div>
+                    <div>
+                    <div style={ml}>TL管理担当</div>
+                    <MemberSel value={p.tlManager} onChange={v=>update(p.id,"tlManager",v)} members={members}/>
+                    </div>
+                    <div>
+                    <div style={ml}>プラットフォーム</div>
+                    <select value={p.platform} onChange={e=>update(p.id,"platform",e.target.value)} style={ss}>
+                        {PLATFORMS.map(pl=><option key={pl} value={pl}>{pl}</option>)}
+                    </select>
+                    </div>
+                    <div>
+                    <div style={ml}>投稿日</div>
+                    <input type="date" value={p.date} onChange={e=>update(p.id,"date",e.target.value)} style={ss}/>
+                    </div>
+                    <div style={{gridColumn:"span 3"}}>
+                    <div style={ml}>メモ・備考</div>
+                    <input value={p.note} onChange={e=>update(p.id,"note",e.target.value)}
+                        placeholder="詳細・注意事項など..." style={{...ss,width:"100%"}}/>
+                    </div>
+                    <div style={{display:"flex",alignItems:"flex-end",justifyContent:"flex-end",gap:8}}>
+                    <button onClick={()=>del(p.id)} className="bh" style={{...btnBase,
+                        background:"#FFF0E0",border:"1.5px solid #D4620A",color:"#D4620A"}}>削除</button>
+                    <button onClick={()=>setExp(null)} className="bh" style={{...btnBase,
+                        background:"#111108",border:"1.5px solid #111",color:"#F5F0E8"}}>閉じる</button>
+                    </div>
+                </div>
+                )}
+            </div>
+            );
+        })}
+        </div>
+    );
+    }
+
+    /* Kanban View — free movement via dropdown on each card */
+    function KanbanView({posts,update,members}){
+    return (
+        <div style={{display:"flex",height:"calc(100vh - 108px)",borderTop:"2px solid #111",overflowX:"auto"}}>
+        {STATUSES.map((lane,li)=>{
+            const m=SM[lane];
+            const lp=posts.filter(p=>p.status===lane);
+            return (
+            <div key={lane} style={{minWidth:200,flex:1,
+                borderRight:li<STATUSES.length-1?"2px solid #111":"none",
+                display:"flex",flexDirection:"column",overflow:"hidden"}}>
+                <div style={{padding:"10px 12px",borderBottom:"2px solid #111",background:m.bg,
+                display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+                <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,fontWeight:700,color:m.color}}>{lane}</span>
+                <span style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:m.color,
+                    border:`1.5px solid ${m.dot}`,padding:"1px 6px",borderRadius:1,fontWeight:700}}>{lp.length}</span>
+                </div>
+                <div style={{flex:1,overflowY:"auto",padding:8,display:"flex",flexDirection:"column",gap:7}}>
+                {lp.map(p=>{
+                    const du=daysUntil(p.date);
+                    return (
+                    <div key={p.id} className="kc" style={{background:"#F5F0E8",border:"1.5px solid #111",
+                        borderRadius:1,padding:"9px 10px",transition:"all 0.12s"}}>
+                        <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,fontWeight:700,
+                        color:"#111108",marginBottom:5,lineHeight:1.4}}>{p.title}</div>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                        <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,
+                            color:du>=0&&du<=3?"#D4620A":"#8A8070"}}>
+                            {p.date.slice(5).replace("-","/")}
+                            {du>=0&&du<=3&&<span style={{fontWeight:700,marginLeft:2}}>{du===0?"·TODAY":`·${du}d`}</span>}
+                        </span>
+                        <div style={{display:"flex",gap:2}}>
+                            {p.creator&&<Av name={p.creator} members={members} size={18}/>}
+                            {p.tlManager&&p.tlManager!==p.creator&&<Av name={p.tlManager} members={members} size={18}/>}
+                        </div>
+                        </div>
+                        {/* Free status move — select any stage */}
+                        <div style={{marginTop:6}}>
+                        <select
+                            value={p.status}
+                            onChange={e=>update(p.id,"status",e.target.value)}
+                            style={{
+                            fontSize:9,padding:"3px 6px",border:`1px solid ${m.dot}`,
+                            background:m.bg,color:m.color,borderRadius:1,
+                            cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontWeight:700,
+                            width:"100%",
+                            }}
+                        >
+                            {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+                        </select>
+                        </div>
+                    </div>
+                    );
+                })}
+                {lp.length===0&&<div style={{color:"#C4B89A",fontSize:11,textAlign:"center",padding:"20px 0"}}>なし</div>}
+                </div>
+            </div>
+            );
+        })}
+        </div>
+    );
+    }
+
+    /* Calendar View */
+    function CalView({posts}){
+    const [ym,setYm]=useState(()=>{const d=new Date();return{y:d.getFullYear(),m:d.getMonth()};});
+    const first=new Date(ym.y,ym.m,1);
+    const last=new Date(ym.y,ym.m+1,0);
+    const cells=[];
+    for(let i=0;i<first.getDay();i++) cells.push(null);
+    for(let d=1;d<=last.getDate();d++) cells.push(d);
+    const byDay=useMemo(()=>{
+        const r={};
+        posts.forEach(p=>{if(!r[p.date])r[p.date]=[];r[p.date].push(p);});
+        return r;
+    },[posts]);
+    const td=todayStr();
+    return (
+        <div>
+        <div style={{display:"flex",alignItems:"center",gap:14,padding:"12px 16px",borderBottom:"2px solid #111"}}>
+            <button onClick={()=>setYm(p=>({y:p.m===0?p.y-1:p.y,m:p.m===0?11:p.m-1}))}
+            className="bh" style={{...btnBase,padding:"4px 10px",background:"transparent",border:"1.5px solid #111"}}>←</button>
+            <span style={{fontFamily:"'DM Mono',monospace",fontSize:16,fontWeight:700,minWidth:100,textAlign:"center",letterSpacing:"0.05em"}}>
+            {ym.y}.{String(ym.m+1).padStart(2,"0")}</span>
+            <button onClick={()=>setYm(p=>({y:p.m===11?p.y+1:p.y,m:p.m===11?0:p.m+1}))}
+            className="bh" style={{...btnBase,padding:"4px 10px",background:"transparent",border:"1.5px solid #111"}}>→</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1.5px solid #111"}}>
+            {["日","月","火","水","木","金","土"].map((d,i)=>(
+            <div key={d} style={{textAlign:"center",padding:"7px 0",fontSize:10,fontWeight:700,
+                fontFamily:"'DM Mono',monospace",color:i===0?"#B8000F":i===6?"#1a6bff":"#8A8070",
+                borderRight:i<6?"1px solid #E8E2D6":"none"}}>{d}</div>
+            ))}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+            {cells.map((d,i)=>{
+            const key=d?`${ym.y}-${String(ym.m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`:null;
+            const dp=key?byDay[key]||[]:[];
+            const isToday=key===td;
+            const dow=i%7;
+            return (
+                <div key={i} style={{minHeight:78,borderBottom:"1px solid #E8E2D6",
+                borderRight:dow<6?"1px solid #E8E2D6":"none",padding:"5px",
+                background:isToday?"#FFF8EC":d?"transparent":"#EDE7D9"}}>
+                {d&&<div style={{fontFamily:"'DM Mono',monospace",fontSize:10,fontWeight:isToday?700:400,
+                    color:isToday?"#D4620A":dow===0?"#B8000F":dow===6?"#1a6bff":"#8A8070",
+                    width:18,height:18,display:"flex",alignItems:"center",justifyContent:"center",
+                    marginBottom:3,background:isToday?"#D4620A22":undefined,borderRadius:1}}>{d}</div>}
+                <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                    {dp.map(p=>(
+                    <div key={p.id} style={{fontSize:9,fontWeight:700,
+                        background:SM[p.status].bg,color:SM[p.status].color,
+                        border:`1px solid ${SM[p.status].dot}`,borderRadius:1,
+                        padding:"1px 4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.title}</div>
+                    ))}
+                </div>
+                </div>
+            );
+            })}
+        </div>
+        </div>
+    );
+    }
+
+    /* Capacity View */
+    function CapView({capData,setCap,members}){
+    return (
+        <div>
+        <div style={{padding:"12px 16px",borderBottom:"2px solid #111"}}>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#8A8070",
+            letterSpacing:"0.1em",marginBottom:8}}>WEEKLY CAPACITY CHECK</div>
+            <div style={{display:"flex",height:6,borderRadius:1,overflow:"hidden",border:"1.5px solid #111"}}>
+            {CAPS.map(c=>{
+                const cnt=members.filter(m=>capData[m]===c).length;
+                return <div key={c} style={{flex:cnt||0.01,background:CM[c],transition:"flex 0.4s ease"}}/>;
+            })}
+            </div>
+            <div style={{display:"flex",gap:16,marginTop:8}}>
+            {CAPS.map(c=>{
+                const cnt=members.filter(m=>capData[m]===c).length;
+                return (
+                <div key={c} style={{display:"flex",alignItems:"center",gap:4}}>
+                    <span style={{width:7,height:7,borderRadius:"50%",background:CM[c],border:"1.5px solid #111",display:"inline-block"}}/>
+                    <span style={{fontSize:9,color:"#8A8070"}}>{c}</span>
+                    <span style={{fontSize:9,fontFamily:"'DM Mono',monospace",fontWeight:700,color:"#111108"}}>{cnt}</span>
+                </div>
+                );
+            })}
+            </div>
+        </div>
+        {members.map(m=>{
+            const cap=capData[m]||"普通";
+            const color=CM[cap];
+            return (
+            <div key={m} className="rh" style={{display:"flex",alignItems:"center",gap:14,
+                padding:"13px 16px",borderBottom:"1px solid #E8E2D6"}}>
+                <Av name={m} members={members} size={32}/>
+                <div style={{fontSize:14,fontWeight:700,color:"#111108",width:80}}>{m}</div>
+                <div style={{flex:1,display:"flex",gap:6,flexWrap:"wrap"}}>
+                {CAPS.map(c=>{
+                    const active=cap===c;
+                    const cc=CM[c];
+                    return (
+                    <button key={c} onClick={()=>setCap(p=>({...p,[m]:c}))} className="bh" style={{
+                        padding:"5px 11px",border:`1.5px solid ${active?cc:"#C4B89A"}`,borderRadius:1,
+                        fontSize:11,fontWeight:active?700:400,cursor:"pointer",
+                        background:active?cc+"22":"transparent",color:active?cc:"#8A8070",transition:"all 0.12s",
+                    }}>{c}</button>
+                    );
+                })}
+                </div>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,fontWeight:700,
+                color,minWidth:80,textAlign:"right"}}>● {cap}</div>
+            </div>
+            );
+        })}
+        </div>
+    );
+    }
+
+    /* Overview */
+    function Overview({posts,capData,members}){
+    const done=posts.filter(p=>["完成","投稿済み"].includes(p.status)).length;
+    const progress=Math.round(done/posts.length*100)||0;
+    const stats=[
+        {label:"総投稿数",   val:posts.length,                                   icon:"📝",color:"#111108"},
+        {label:"完成+投稿済",val:done,                                           icon:"✅",color:"#1A7A3C"},
+        {label:"未着手",     val:posts.filter(p=>p.status==="未着手").length,    icon:"⏳",color:"#B8000F"},
+        {label:"担当未割当", val:posts.filter(p=>!p.creator).length,            icon:"⚠️",color:"#D4620A"},
+    ];
+    return (
+        <div style={{padding:"20px"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
+            {stats.map(s=>(
+            <div key={s.label} style={{background:"#F5F0E8",border:"1.5px solid #111",borderRadius:1,
+                padding:"16px 18px",boxShadow:"2px 2px 0 #111"}}>
+                <div style={{fontSize:20,marginBottom:6}}>{s.icon}</div>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:28,fontWeight:700,color:s.color,lineHeight:1}}>{s.val}</div>
+                <div style={{fontSize:10,color:"#8A8070",marginTop:4}}>{s.label}</div>
+            </div>
+            ))}
+        </div>
+        <div style={{border:"1.5px solid #111",borderRadius:1,padding:"16px 18px",marginBottom:20,boxShadow:"2px 2px 0 #111"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+            <span style={{fontSize:11,fontWeight:700}}>全体進捗</span>
+            <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:700,color:"#1A7A3C"}}>{progress}%</span>
+            </div>
+            <div style={{height:8,background:"#E8E2D6",border:"1px solid #C4B89A",borderRadius:1,overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${progress}%`,background:"#2AAF5C",transition:"width 0.5s"}}/>
+            </div>
+        </div>
+        {/* Per-status breakdown */}
+        <div style={{border:"1.5px solid #111",borderRadius:1,overflow:"hidden",boxShadow:"2px 2px 0 #111",marginBottom:20}}>
+            <div style={{padding:"10px 14px",borderBottom:"2px solid #111",
+            fontFamily:"'DM Mono',monospace",fontSize:10,color:"#8A8070",letterSpacing:"0.08em"}}>
+            STATUS BREAKDOWN</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+            {STATUSES.map(s=>{
+                const cnt=posts.filter(p=>p.status===s).length;
+                const m=SM[s];
+                return (
+                <div key={s} style={{padding:"12px 10px",textAlign:"center",borderRight:"1px solid #E8E2D6"}}>
+                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:20,fontWeight:700,color:m.color}}>{cnt}</div>
+                    <div style={{fontSize:8,color:"#8A8070",marginTop:4,lineHeight:1.3}}>{s}</div>
+                </div>
+                );
+            })}
+            </div>
+        </div>
+        <div style={{border:"1.5px solid #111",borderRadius:1,overflow:"hidden",boxShadow:"2px 2px 0 #111"}}>
+            <div style={{padding:"10px 14px",borderBottom:"2px solid #111",
+            fontFamily:"'DM Mono',monospace",fontSize:10,color:"#8A8070",letterSpacing:"0.08em"}}>
+            MEMBER ASSIGNMENTS</div>
+            {members.map(m=>{
+            const cr=posts.filter(p=>p.creator===m);
+            const tl=posts.filter(p=>p.tlManager===m);
+            if(!cr.length&&!tl.length) return null;
+            return (
+                <div key={m} className="rh" style={{display:"flex",alignItems:"center",gap:12,
+                padding:"10px 14px",borderBottom:"1px solid #E8E2D6"}}>
+                <Av name={m} members={members} size={28}/>
+                <span style={{fontSize:13,fontWeight:700,color:"#111108",width:72}}>{m}</span>
+                <div style={{flex:1,display:"flex",gap:5,flexWrap:"wrap"}}>
+                    {cr.map(p=><span key={p.id} style={{fontSize:9,padding:"2px 6px",borderRadius:1,
+                    background:"#E8F0FF",color:"#1a6bff",border:"1px solid #1a6bff",fontWeight:700}}>✏ {p.title}</span>)}
+                    {tl.map(p=><span key={p.id} style={{fontSize:9,padding:"2px 6px",borderRadius:1,
+                    background:"#E4F5EB",color:"#1A7A3C",border:"1px solid #2AAF5C",fontWeight:700}}>📋 {p.title}</span>)}
+                </div>
+                <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#8A8070",whiteSpace:"nowrap"}}>
+                    作{cr.length}/TL{tl.length}</span>
+                <span style={{fontSize:9,fontWeight:700,color:CM[capData[m]||"普通"],fontFamily:"'DM Mono',monospace"}}>
+                    ● {capData[m]||"普通"}</span>
+                </div>
+            );
+            })}
+        </div>
+        </div>
+    );
+    }
+
+    /* Member Manager Modal */
+    function MemberManager({members,setMembers,onClose}){
+    const [newName,setNewName]=useState("");
+    const add=()=>{
+        const n=newName.trim();
+        if(!n||members.includes(n)) return;
+        setMembers(p=>[...p,n]);
+        setNewName("");
+    };
+    return (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
+        display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,
+        animation:"fadeIn 0.12s ease"}} onClick={onClose}>
+        <div style={{background:"#F5F0E8",border:"2px solid #111",borderRadius:1,
+            padding:26,width:400,maxWidth:"92vw",boxShadow:"6px 6px 0 #111"}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:15,fontWeight:900,color:"#111108",marginBottom:18}}>👥 メンバー管理</div>
+            <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16,maxHeight:240,overflowY:"auto"}}>
+            {members.map((m,i)=>(
+                <div key={m} style={{display:"flex",alignItems:"center",gap:10,
+                padding:"7px 10px",background:"#EDE7D9",border:"1px solid #C4B89A",borderRadius:1}}>
+                <Av name={m} members={members} size={24}/>
+                <span style={{flex:1,fontSize:13,fontWeight:600,color:"#111108"}}>{m}</span>
+                <button onClick={()=>setMembers(p=>p.filter((_,j)=>j!==i))} className="bh" style={{
+                    fontSize:9,padding:"2px 7px",border:"1px solid #D4620A",background:"transparent",
+                    color:"#D4620A",cursor:"pointer",borderRadius:1,fontWeight:700}}>削除</button>
+                </div>
+            ))}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+            <input
+                value={newName} onChange={e=>setNewName(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&add()}
+                placeholder="新しいメンバー名..."
+                style={{...ss,flex:1}}
+            />
+            <button onClick={add} className="bh" style={{...btnBase,background:"#111108",
+                border:"1.5px solid #111",color:"#F5F0E8",padding:"7px 14px"}}>追加</button>
+            </div>
+            <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
+            <button onClick={onClose} className="bh" style={{...btnBase,background:"transparent",
+                border:"1.5px solid #C4B89A",color:"#8A8070"}}>閉じる</button>
+            </div>
+        </div>
+        </div>
+    );
+    }
+
+    /* Add Post Modal */
+    function AddModal({onAdd,onClose,members}){
+    const [f,setF]=useState({title:"",date:"",creator:"",tlManager:"",platform:"Instagram",note:""});
+    const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+    const ok=f.title&&f.date;
+    return (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
+        display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,
+        animation:"fadeIn 0.12s ease"}} onClick={onClose}>
+        <div style={{background:"#F5F0E8",border:"2px solid #111",borderRadius:1,
+            padding:26,width:480,maxWidth:"92vw",boxShadow:"6px 6px 0 #111",
+            animation:"slideDown 0.15s ease"}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:16,fontWeight:900,color:"#111108",marginBottom:18}}>＋ 投稿を追加</div>
+            <div style={{display:"flex",flexDirection:"column",gap:13}}>
+            <div>
+                <div style={ml}>投稿タイトル *</div>
+                <input value={f.title} onChange={set("title")} placeholder="例: 新歓キックオフ告知"
+                style={{...ss,width:"100%"}}/>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div>
+                <div style={ml}>投稿予定日 *</div>
+                <input type="date" value={f.date} onChange={set("date")} style={{...ss,width:"100%"}}/>
+                </div>
+                <div>
+                <div style={ml}>プラットフォーム</div>
+                <select value={f.platform} onChange={set("platform")} style={{...ss,width:"100%"}}>
+                    {PLATFORMS.map(p=><option key={p} value={p}>{p}</option>)}
+                </select>
+                </div>
+                <div>
+                <div style={ml}>作成担当</div>
+                <MemberSel value={f.creator} onChange={v=>setF(p=>({...p,creator:v}))} members={members}/>
+                </div>
+                <div>
+                <div style={ml}>TL管理担当</div>
+                <MemberSel value={f.tlManager} onChange={v=>setF(p=>({...p,tlManager:v}))} members={members}/>
+                </div>
+            </div>
+            <div>
+                <div style={ml}>メモ</div>
+                <input value={f.note} onChange={set("note")} placeholder="備考・注意事項など..."
+                style={{...ss,width:"100%"}}/>
+            </div>
+            </div>
+            <div style={{display:"flex",gap:8,marginTop:20,justifyContent:"flex-end"}}>
+            <button onClick={onClose} className="bh" style={{...btnBase,background:"transparent",
+                border:"1.5px solid #C4B89A",color:"#8A8070"}}>キャンセル</button>
+            <button onClick={()=>ok&&onAdd({...f,id:uid(),status:"未着手"})} className="bh" style={{
+                ...btnBase,background:ok?"#111108":"#C4B89A",
+                border:`1.5px solid ${ok?"#111":"#C4B89A"}`,
+                color:"#F5F0E8",cursor:ok?"pointer":"not-allowed",opacity:ok?1:0.6}}>追加する</button>
+            </div>
+        </div>
+        </div>
+    );
+    }
+
+    /* App */
+    function App(){
+    const [posts,setPosts]       = useState(SEED);
+    const [members,setMembers]   = useState(DEFAULT_MEMBERS);
+    const [view,setView]         = useState("list");
+    const [showAdd,setShowAdd]   = useState(false);
+    const [showMembers,setShowMembers] = useState(false);
+    const [searchQ,setSearchQ]   = useState("");
+    const [capData,setCapData]   = useState(DEFAULT_MEMBERS.reduce((a,m)=>({...a,[m]:"普通"}),{}));
+    const [filter,setFilter]     = useState({status:"all",platform:"all",member:"all"});
+
+    // Sync capData when members change
+    useEffect(()=>{
+        setCapData(prev=>{
+        const next={...prev};
+        members.forEach(m=>{ if(!next[m]) next[m]="普通"; });
+        return next;
+        });
+    },[members]);
+
+    const update  = (id,f,v) => setPosts(p=>p.map(x=>x.id===id?{...x,[f]:v}:x));
+    const del     = id        => setPosts(p=>p.filter(x=>x.id!==id));
+    const addPost = data      => {
+        setPosts(p=>[...p,data].sort((a,b)=>a.date.localeCompare(b.date)));
+        setShowAdd(false);
+    };
+
+    const filtered=useMemo(()=>posts.filter(p=>{
+        if(filter.status!=="all"&&p.status!==filter.status) return false;
+        if(filter.platform!=="all"&&p.platform!==filter.platform) return false;
+        if(filter.member!=="all"&&p.creator!==filter.member&&p.tlManager!==filter.member) return false;
+        return true;
+    }),[posts,filter]);
+
+    const alertCnt=posts.filter(p=>{
+        const du=daysUntil(p.date);
+        return du>=0&&du<=3&&!["完成","投稿済み"].includes(p.status);
+    }).length;
+
+    const progress=Math.round(
+        posts.filter(p=>["完成","投稿済み"].includes(p.status)).length/posts.length*100
+    )||0;
+
+    const TABS=[
+        ["list","≡ リスト"],["kanban","□ カンバン"],
+        ["calendar","◉ カレンダー"],["capacity","↑ キャパ"],["overview","◆ 概要"],
+    ];
+
+    return (
+        <div style={{background:"#F5F0E8",minHeight:"100vh"}}>
+        {/* Top bar */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+            padding:"0 18px",height:50,borderBottom:"2px solid #111",background:"#F5F0E8",
+            position:"sticky",top:0,zIndex:90}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{background:"#111108",color:"#F5F0E8",padding:"4px 9px",
+                fontSize:10,fontWeight:900,letterSpacing:"0.12em",fontFamily:"'DM Mono',monospace",borderRadius:1}}>MKT</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#111108"}}>
+                新歓期 投稿管理
+                <span style={{fontSize:10,color:"#8A8070",fontWeight:400,marginLeft:8}}>AIESEC HI Mkt</span>
+            </div>
+            {alertCnt>0&&(
+                <div style={{background:"#D4620A",color:"#fff",fontSize:8,fontWeight:700,
+                padding:"2px 7px",borderRadius:20,fontFamily:"'DM Mono',monospace",border:"1.5px solid #111"}}>
+                ⚡ {alertCnt}件が締切近い
+                </div>
+            )}
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {/* Progress */}
+            <div style={{display:"flex",alignItems:"center",gap:7}}>
+                <div style={{width:72,height:4,background:"#E8E2D6",border:"1px solid #C4B89A",borderRadius:1,overflow:"hidden"}}>
+                <div style={{height:"100%",width:`${progress}%`,background:"#2AAF5C",transition:"width 0.5s"}}/>
+                </div>
+                <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#8A8070",fontWeight:700}}>{progress}%</span>
+            </div>
+            {/* Tabs */}
+            <div style={{display:"flex",gap:1,border:"1.5px solid #111",borderRadius:1,overflow:"hidden"}}>
+                {TABS.map(([v,l])=>(
+                <button key={v} onClick={()=>setView(v)} className="bh" style={{
+                    padding:"6px 10px",border:"none",
+                    background:view===v?"#111108":"transparent",
+                    color:view===v?"#F5F0E8":"#8A8070",
+                    fontSize:9,fontWeight:700,cursor:"pointer",
+                    fontFamily:"'DM Mono',monospace",letterSpacing:"0.04em",
+                    borderRight:v!=="overview"?"1px solid #C4B89A":"none",
+                }}>{l}</button>
+                ))}
+            </div>
+            {/* Member manager button */}
+            <button onClick={()=>setShowMembers(true)} className="bh" style={{
+                ...btnBase,padding:"6px 10px",background:"transparent",
+                border:"1.5px solid #C4B89A",color:"#8A8070",fontSize:9,
+                fontFamily:"'DM Mono',monospace"}}>
+                👥 {members.length}人
+            </button>
+            <button onClick={()=>setShowAdd(true)} className="bh" style={{
+                ...btnBase,padding:"6px 12px",background:"#111108",
+                border:"1.5px solid #111",color:"#F5F0E8",fontSize:10}}>＋ 追加</button>
+            </div>
+        </div>
+
+        {/* Filter bar */}
+        {["list","kanban"].includes(view)&&(
+            <div style={{display:"flex",alignItems:"center",gap:9,padding:"7px 16px",
+            borderBottom:"1px solid #E8E2D6",background:"#EDE7D9",flexWrap:"wrap"}}>
+            <span style={{fontSize:9,fontWeight:700,color:"#8A8070",
+                fontFamily:"'DM Mono',monospace",letterSpacing:"0.1em"}}>FILTER</span>
+            <input value={searchQ} onChange={e=>setSearchQ(e.target.value)}
+                placeholder="タイトル・メンバーで検索..." style={{...ss,padding:"4px 9px",width:190,fontSize:11}}/>
+            {[
+                ["status",["all",...STATUSES],"全ステータス"],
+                ["platform",["all",...PLATFORMS],"全PF"],
+                ["member",["all",...members],"全メンバー"],
+            ].map(([k,opts,ph])=>(
+                <select key={k} value={filter[k]}
+                onChange={e=>setFilter(p=>({...p,[k]:e.target.value}))} style={{...ss,fontSize:11}}>
+                {opts.map(o=><option key={o} value={o}>{o==="all"?ph:o}</option>)}
+                </select>
+            ))}
+            {(filter.status!=="all"||filter.platform!=="all"||filter.member!=="all"||searchQ)&&(
+                <button onClick={()=>{setFilter({status:"all",platform:"all",member:"all"});setSearchQ("");}}
+                className="bh" style={{fontSize:9,fontFamily:"'DM Mono',monospace",color:"#D4620A",
+                    background:"transparent",border:"none",cursor:"pointer",fontWeight:700}}>× RESET</button>
+            )}
+            <span style={{marginLeft:"auto",fontSize:9,fontFamily:"'DM Mono',monospace",color:"#8A8070"}}>
+                {filtered.length}/{posts.length}</span>
+            </div>
+        )}
+
+        {/* Content */}
+        <div style={{animation:"fadeIn 0.15s ease"}}>
+            {view==="list"     && <ListView posts={filtered} update={update} del={del} searchQ={searchQ} members={members}/>}
+            {view==="kanban"   && <KanbanView posts={filtered} update={update} members={members}/>}
+            {view==="calendar" && <CalView posts={posts}/>}
+            {view==="capacity" && <CapView capData={capData} setCap={setCapData} members={members}/>}
+            {view==="overview" && <Overview posts={posts} capData={capData} members={members}/>}
+        </div>
+
+        {showAdd     && <AddModal onAdd={addPost} onClose={()=>setShowAdd(false)} members={members}/>}
+        {showMembers && <MemberManager members={members} setMembers={setMembers} onClose={()=>setShowMembers(false)}/>}
+        </div>
+    );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+    </script>
+    </body>
+    </html>
