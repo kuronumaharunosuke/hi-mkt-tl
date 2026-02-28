@@ -46,12 +46,12 @@
     const AV_COLORS = ["#1a6bff","#D4620A","#1A7A3C","#B8000F","#6B4FBB","#0A7C7C","#8B4513","#2E7D99","#A0522D","#4A235A","#C2185B","#00796B"];
 
     const SEED = [
-    {id:1,title:"新歓キックオフ告知",   date:"2026-03-06",creator:"はるのすけ",tlManager:"かえで", platform:"Instagram", status:"作成中",    note:"ビジュアル重視で"},
-    {id:2,title:"AIESEC紹介①",         date:"2026-03-09",creator:"あや",       tlManager:"",       platform:"Instagram", status:"未着手",    note:""},
-    {id:3,title:"OB/OG対談リール",      date:"2026-03-12",creator:"こと",       tlManager:"寛太",   platform:"TikTok",    status:"未着手",    note:""},
-    {id:4,title:"説明会告知",           date:"2026-03-15",creator:"楓花",       tlManager:"めい",   platform:"Twitter/X", status:"未着手",    note:"Xで拡散優先"},
-    {id:5,title:"メンバーインタビュー", date:"2026-03-18",creator:"",           tlManager:"",       platform:"note",      status:"未着手",    note:""},
-    {id:6,title:"最終入会締切リマインド",date:"2026-03-22",creator:"もあな",    tlManager:"あや",   platform:"Instagram", status:"未着手",    note:"ストーリーズも"},
+    {id:1,title:"新歓キックオフ告知",   date:"2026-03-06",creator:"はるのすけ",tlManager:"かえで", platform:"Instagram", status:"作成中",    note:"ビジュアル重視で", link:""},
+    {id:2,title:"AIESEC紹介①",         date:"2026-03-09",creator:"あや",       tlManager:"",       platform:"Instagram", status:"未着手",    note:"", link:""},
+    {id:3,title:"OB/OG対談リール",      date:"2026-03-12",creator:"こと",       tlManager:"寛太",   platform:"TikTok",    status:"未着手",    note:"", link:""},
+    {id:4,title:"説明会告知",           date:"2026-03-15",creator:"楓花",       tlManager:"めい",   platform:"Twitter/X", status:"未着手",    note:"Xで拡散優先", link:""},
+    {id:5,title:"メンバーインタビュー", date:"2026-03-18",creator:"",           tlManager:"",       platform:"note",      status:"未着手",    note:"", link:""},
+    {id:6,title:"最終入会締切リマインド",date:"2026-03-22",creator:"もあな",    tlManager:"あや",   platform:"Instagram", status:"未着手",    note:"ストーリーズも", link:""},
     ];
 
     const todayStr  = () => new Date().toISOString().slice(0,10);
@@ -136,6 +136,104 @@
     );
     }
 
+    /* Link Preview */
+    function LinkPreview({url}){
+    if(!url) return null;
+
+    const isImage  = /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(url);
+    const isDrive  = url.includes("drive.google.com") || url.includes("docs.google.com");
+    const isFigma  = url.includes("figma.com");
+    const isCanva  = url.includes("canva.com");
+    const isSlides = url.includes("docs.google.com/presentation");
+    const isSheets = url.includes("docs.google.com/spreadsheets");
+    const isDoc    = url.includes("docs.google.com/document");
+
+    // Service badges
+    const serviceInfo = isCanva  ? {label:"Canva",    icon:"🎨", color:"#7D2AE8", bg:"#F3EEFF"}
+        : isFigma  ? {label:"Figma",    icon:"🎭", color:"#1A1A1A", bg:"#F5F5F5"}
+        : isSlides ? {label:"Slides",   icon:"📊", color:"#F4B400", bg:"#FFF8E0"}
+        : isSheets ? {label:"Sheets",   icon:"📗", color:"#0F9D58", bg:"#E8F5EC"}
+        : isDoc    ? {label:"Docs",     icon:"📄", color:"#4285F4", bg:"#E8F0FF"}
+        : isDrive  ? {label:"Drive",    icon:"💾", color:"#4285F4", bg:"#E8F0FF"}
+        : isImage  ? {label:"IMAGE",    icon:"🖼",  color:"#8A8070", bg:"#EDE7D9"}
+        :            {label:"LINK",     icon:"🔗", color:"#8A8070", bg:"#EDE7D9"};
+
+    // Drive embed URL (works for images/PDFs/videos in Drive)
+    const driveEmbed = ()=>{
+        const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if(m) return `https://drive.google.com/file/d/${m[1]}/preview`;
+        const pub = url.replace("/edit","").replace("?usp=sharing","");
+        return pub + (pub.includes("?")?"&":"?") + "embedded=true";
+    };
+
+    // Only embed if we're confident it works
+    const canEmbed = (isDrive && !isCanva) || isSlides || isSheets || isDoc;
+    const embedUrl = canEmbed ? driveEmbed() : null;
+
+    const hostname = (() => {
+        try { return new URL(url).hostname.replace("www.",""); }
+        catch { return url; }
+    })();
+
+    return (
+        <div style={{marginTop:10,border:"1.5px solid #C4B89A",borderRadius:1,overflow:"hidden",background:"#fff"}}>
+        {/* Top bar */}
+        <div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",
+            background:"#EDE7D9",borderBottom:"1px solid #C4B89A"}}>
+            <span style={{fontSize:8,fontFamily:"'DM Mono',monospace",color:"#8A8070",letterSpacing:"0.06em",
+            background:serviceInfo.bg,color:serviceInfo.color,border:`1px solid ${serviceInfo.color}44`,
+            padding:"1px 5px",borderRadius:1,fontWeight:700,flexShrink:0}}>
+            {serviceInfo.icon} {serviceInfo.label}
+            </span>
+            <span style={{flex:1,fontSize:10,color:"#8A8070",fontFamily:"'DM Mono',monospace",
+            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{hostname}</span>
+            <a href={url} target="_blank" rel="noopener noreferrer" style={{
+            fontSize:9,padding:"2px 8px",border:"1px solid #1a6bff",borderRadius:1,
+            color:"#1a6bff",textDecoration:"none",fontFamily:"'DM Mono',monospace",
+            fontWeight:700,flexShrink:0,background:"#E8F0FF",
+            }}>開く ↗</a>
+        </div>
+
+        {/* Content */}
+        {isImage ? (
+            <img src={url} alt="preview"
+            style={{width:"100%",maxHeight:320,objectFit:"contain",display:"block",background:"#f9f9f9"}}
+            onError={e=>{e.target.parentNode.innerHTML='<div style="padding:16px;text-align:center;font-size:11px;color:#C4B89A">画像を読み込めませんでした</div>';}}
+            />
+        ) : embedUrl ? (
+            <div style={{position:"relative",width:"100%",paddingTop:"56.25%",background:"#f5f5f5"}}>
+            <iframe
+                src={embedUrl}
+                style={{position:"absolute",inset:0,width:"100%",height:"100%",border:"none"}}
+                allow="autoplay"
+            />
+            </div>
+        ) : (
+            /* Link card — used for Canva, Figma, and all other external URLs */
+            <a href={url} target="_blank" rel="noopener noreferrer" style={{
+            display:"flex",alignItems:"center",gap:14,padding:"16px 18px",
+            textDecoration:"none",background:"#FAFAF8",
+            }}>
+            <div style={{width:44,height:44,borderRadius:1,
+                background:serviceInfo.bg,border:`1.5px solid ${serviceInfo.color}44`,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:22,flexShrink:0}}>
+                {serviceInfo.icon}
+            </div>
+            <div style={{overflow:"hidden",flex:1}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#111108",marginBottom:3}}>
+                {serviceInfo.label}で開く
+                </div>
+                <div style={{fontSize:10,color:"#8A8070",overflow:"hidden",
+                textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{url}</div>
+            </div>
+            <span style={{fontSize:16,color:serviceInfo.color,flexShrink:0}}>↗</span>
+            </a>
+        )}
+        </div>
+    );
+    }
+
     /* List View */
     function ListView({posts,update,del,searchQ,members}){
     const [exp,setExp]=useState(null);
@@ -176,7 +274,10 @@
                 </div>
                 <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:13,fontWeight:700,
                     color:past?"#C4B89A":"#111108",padding:"0 3px",overflow:"hidden",
-                    textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.title}</div>
+                    textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {p.link&&<span style={{fontSize:9,marginRight:5,color:"#1a6bff"}} title={p.link}>🔗</span>}
+                    {p.title}
+                </div>
                 <div style={{padding:"0 3px"}}>
                     <span style={{fontSize:9,fontFamily:"'DM Mono',monospace",color:"#8A8070",
                     border:"1px solid #C4B89A",padding:"2px 5px",borderRadius:1}}>{p.platform}</span>
@@ -230,6 +331,17 @@
                         background:"#FFF0E0",border:"1.5px solid #D4620A",color:"#D4620A"}}>削除</button>
                     <button onClick={()=>setExp(null)} className="bh" style={{...btnBase,
                         background:"#111108",border:"1.5px solid #111",color:"#F5F0E8"}}>閉じる</button>
+                    </div>
+                    {/* Link + Preview — full width */}
+                    <div style={{gridColumn:"span 4"}}>
+                    <div style={ml}>投稿リンク / ファイルURL</div>
+                    <input
+                        value={p.link||""}
+                        onChange={e=>update(p.id,"link",e.target.value)}
+                        placeholder="https://... (Google Drive, Canva, Figma, 画像URL など)"
+                        style={{...ss,width:"100%"}}
+                    />
+                    <LinkPreview url={(p.link||"").trim()}/>
                     </div>
                 </div>
                 )}
@@ -549,7 +661,7 @@
 
     /* Add Post Modal */
     function AddModal({onAdd,onClose,members}){
-    const [f,setF]=useState({title:"",date:"",creator:"",tlManager:"",platform:"Instagram",note:""});
+    const [f,setF]=useState({title:"",date:"",creator:"",tlManager:"",platform:"Instagram",note:"",link:""});
     const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
     const ok=f.title&&f.date;
     return (
@@ -589,6 +701,11 @@
             <div>
                 <div style={ml}>メモ</div>
                 <input value={f.note} onChange={set("note")} placeholder="備考・注意事項など..."
+                style={{...ss,width:"100%"}}/>
+            </div>
+            <div>
+                <div style={ml}>投稿リンク / ファイルURL</div>
+                <input value={f.link} onChange={set("link")} placeholder="https://..."
                 style={{...ss,width:"100%"}}/>
             </div>
             </div>
