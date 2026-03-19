@@ -1,1006 +1,1089 @@
-    <!DOCTYPE html>
-    <html lang="ja">
-    <head>
-    <meta charset="UTF-8"/>
-    <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <title>新歓期 投稿管理 | AIESEC HI Mkt</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com"/>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet"/>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    html,body{background:#F5F0E8;font-family:'Noto Sans JP',sans-serif;-webkit-text-size-adjust:100%}
-    ::-webkit-scrollbar{width:4px}
-    ::-webkit-scrollbar-track{background:#EDE7D9}
-    ::-webkit-scrollbar-thumb{background:#C4B89A;border-radius:3px}
-    @keyframes slideDown{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}
-    .rh:hover{background:#EDE7D9!important}
-    .bh:hover{opacity:0.8}
-    .kc:hover{box-shadow:3px 3px 0 #111;transform:translate(-1px,-1px)}
-    select,input,button,textarea{font-family:'Noto Sans JP',sans-serif}
-    input[type=date]{-webkit-appearance:none}
-    /* Urgency left-border pulse for today */
-    .today-pulse{animation:pulse 1.8s ease-in-out infinite}
-    </style>
-    </head>
-    <body>
-    <div id="root"></div>
-    <script type="text/babel">
-    const { useState, useMemo, useEffect, useRef, useCallback } = React;
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>新歓期 投稿管理 | AIESEC HI Mkt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    /* ── Constants ── */
-    const DEFAULT_MEMBERS = ["こと","かえで","あや","寛太","楓花","めい","はるのすけ","もあな"];
-    const STATUSES = ["未着手","作成中","確認待ち","MCチェック提出済","MCFBもらった","完成","投稿済み"];
-    const SM = {
-    "未着手":          {color:"#8A8070",bg:"#EDE7D9",dot:"#C4B89A"},
-    "作成中":          {color:"#1a6bff",bg:"#E8F0FF",dot:"#1a6bff"},
-    "確認待ち":        {color:"#7C3ABD",bg:"#F3EEFF",dot:"#7C3ABD"},
-    "MCチェック提出済":{color:"#D4620A",bg:"#FFF0E0",dot:"#D4620A"},
-    "MCFBもらった":    {color:"#0A7C7C",bg:"#E0F5F5",dot:"#0A7C7C"},
-    "完成":            {color:"#1A7A3C",bg:"#E4F5EB",dot:"#2AAF5C"},
-    "投稿済み":        {color:"#444",   bg:"#E8E4DC",dot:"#888"},
-    };
-    const CM   = {"余裕あり":"#2AAF5C","普通":"#D4A017","やや忙しい":"#D4620A","かなり忙しい":"#B8000F"};
-    const CAPS = Object.keys(CM);
-    const AV_COLORS = ["#1a6bff","#D4620A","#1A7A3C","#B8000F","#6B4FBB","#0A7C7C","#8B4513","#2E7D99","#A0522D","#4A235A","#C2185B","#00796B"];
+<!-- ════════════════════════════════════════════════════
+     Firebase SDK
+════════════════════════════════════════════════════ -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-    const PHOTOS = {
-    header:   "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1400&h=6&fit=crop&auto=format&q=80",
-    listBg:   "https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=1400&h=80&fit=crop&auto=format&q=50",
-    kanban:   "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=1400&h=80&fit=crop&auto=format&q=50",
-    calendar: "https://images.unsplash.com/photo-1506784365847-bbad939e9335?w=1400&h=80&fit=crop&auto=format&q=50",
-    capacity: "https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=1400&h=120&fit=crop&auto=format&q=60",
-    overview: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1400&h=160&fit=crop&auto=format&q=60",
-    modal:    "https://images.unsplash.com/photo-1512758017271-d7b84c2113f1?w=460&h=60&fit=crop&auto=format&q=60",
-    };
+<!-- ════════════════════════════════════════════════════
+     ★ Firebase 設定 — ここだけ自分のプロジェクト値に書き換える
+     Firebase Console > プロジェクトの設定 > マイアプリ > 構成
+════════════════════════════════════════════════════ -->
+<script>
+const firebaseConfig = {
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId:             "YOUR_APP_ID"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+googleProvider.setCustomParameters({ hd: "aiesec.jp" }); // ドメインヒント
+</script>
 
-    const SEED = [
-    {id:1,title:"新歓キックオフ告知",    date:"2026-03-06",creator:"はるのすけ",tlManager:"かえで",status:"作成中",  note:"ビジュアル重視で",link:""},
-    {id:2,title:"AIESEC紹介①",          date:"2026-03-09",creator:"あや",       tlManager:"",      status:"未着手",  note:"",link:""},
-    {id:3,title:"OB/OG対談リール",       date:"2026-03-12",creator:"こと",       tlManager:"寛太",  status:"未着手",  note:"",link:""},
-    {id:4,title:"説明会告知",            date:"2026-03-15",creator:"楓花",       tlManager:"めい",  status:"未着手",  note:"",link:""},
-    {id:5,title:"メンバーインタビュー",  date:"2026-03-18",creator:"",           tlManager:"",      status:"未着手",  note:"",link:""},
-    {id:6,title:"最終入会締切リマインド",date:"2026-03-22",creator:"もあな",     tlManager:"あや",  status:"未着手",  note:"ストーリーズも",link:""},
-    ];
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#F5F0E8;font-family:'Noto Sans JP',sans-serif;-webkit-text-size-adjust:100%}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:#EDE7D9}
+::-webkit-scrollbar-thumb{background:#C4B89A;border-radius:3px}
+@keyframes slideDown{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.rh:hover{background:#EDE7D9!important}
+.bh:hover{opacity:0.8}
+.kc:hover{box-shadow:3px 3px 0 #111;transform:translate(-1px,-1px)}
+select,input,button,textarea{font-family:'Noto Sans JP',sans-serif}
+input[type=date]{-webkit-appearance:none}
+.today-pulse{animation:pulse 1.8s ease-in-out infinite}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useEffect, useRef, useCallback } = React;
 
-    /* ── Helpers ── */
-    const todayStr  = () => new Date().toISOString().slice(0,10);
-    const daysUntil = d  => Math.ceil((new Date(d) - new Date(todayStr())) / 86400000);
-    const initial   = n  => n ? n.slice(0,1) : "?";
-    const uid       = () => Date.now() + Math.random();
+/* ── Constants ── */
+const DEFAULT_MEMBERS = ["こと","かえで","あや","寛太","楓花","めい","はるのすけ","もあな"];
+const STATUSES = ["未着手","作成中","確認待ち","MCチェック提出済","MCFBもらった","完成","投稿済み"];
+const SM = {
+  "未着手":          {color:"#8A8070",bg:"#EDE7D9",dot:"#C4B89A"},
+  "作成中":          {color:"#1a6bff",bg:"#E8F0FF",dot:"#1a6bff"},
+  "確認待ち":        {color:"#7C3ABD",bg:"#F3EEFF",dot:"#7C3ABD"},
+  "MCチェック提出済":{color:"#D4620A",bg:"#FFF0E0",dot:"#D4620A"},
+  "MCFBもらった":    {color:"#0A7C7C",bg:"#E0F5F5",dot:"#0A7C7C"},
+  "完成":            {color:"#1A7A3C",bg:"#E4F5EB",dot:"#2AAF5C"},
+  "投稿済み":        {color:"#444",   bg:"#E8E4DC",dot:"#888"},
+};
+const CM   = {"余裕あり":"#2AAF5C","普通":"#D4A017","やや忙しい":"#D4620A","かなり忙しい":"#B8000F"};
+const CAPS = Object.keys(CM);
+const AV_COLORS = ["#1a6bff","#D4620A","#1A7A3C","#B8000F","#6B4FBB","#0A7C7C","#8B4513","#2E7D99","#A0522D","#4A235A","#C2185B","#00796B"];
 
-    /* Urgency: returns {rowBg, leftBorder, labelColor, labelText} */
-    const urgency = (du, status) => {
-    const done = ["完成","投稿済み"].includes(status);
-    const past = du < 0 && !done;
-    if (done)        return {rowBg:"transparent",    left:"none",              labelColor:"#C4B89A", labelText:null};
-    if (past)        return {rowBg:"transparent",    left:"none",              labelColor:"#C4B89A", labelText:"PAST"};
-    if (du === 0)    return {rowBg:"#FFF0F0",        left:"4px solid #B8000F", labelColor:"#B8000F", labelText:"TODAY"};
-    if (du <= 2)     return {rowBg:"#FFF4ED",        left:"4px solid #D4620A", labelColor:"#D4620A", labelText:`${du}日後`};
-    if (du <= 5)     return {rowBg:"#FFFBE8",        left:"4px solid #D4A017", labelColor:"#D4A017", labelText:`${du}日後`};
-    if (du <= 7)     return {rowBg:"#FAFFF0",        left:"4px solid #8AC020", labelColor:"#8AC020", labelText:`${du}日後`};
-    return           {rowBg:"transparent",           left:"none",              labelColor:"#8A8070", labelText:null};
-    };
+const PHOTOS = {
+  header:   "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1400&h=6&fit=crop&auto=format&q=80",
+  listBg:   "https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=1400&h=80&fit=crop&auto=format&q=50",
+  kanban:   "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=1400&h=80&fit=crop&auto=format&q=50",
+  calendar: "https://images.unsplash.com/photo-1506784365847-bbad939e9335?w=1400&h=80&fit=crop&auto=format&q=50",
+  capacity: "https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=1400&h=120&fit=crop&auto=format&q=60",
+  overview: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1400&h=160&fit=crop&auto=format&q=60",
+  modal:    "https://images.unsplash.com/photo-1512758017271-d7b84c2113f1?w=460&h=60&fit=crop&auto=format&q=60",
+};
 
-    /* ── Responsive hook ── */
-    function useWindowWidth(){
-    const [w,setW]=useState(()=>typeof window!=="undefined"?window.innerWidth:1200);
-    useEffect(()=>{
-        const handler=()=>setW(window.innerWidth);
-        window.addEventListener("resize",handler);
-        return ()=>window.removeEventListener("resize",handler);
-    },[]);
-    return w;
-    }
+const SEED = [
+  {id:"1",title:"新歓キックオフ告知",    date:"2026-03-06",creator:"はるのすけ",tlManager:"かえで",status:"作成中",  note:"ビジュアル重視で",link:""},
+  {id:"2",title:"AIESEC紹介①",          date:"2026-03-09",creator:"あや",       tlManager:"",      status:"未着手",  note:"",link:""},
+  {id:"3",title:"OB/OG対談リール",       date:"2026-03-12",creator:"こと",       tlManager:"寛太",  status:"未着手",  note:"",link:""},
+  {id:"4",title:"説明会告知",            date:"2026-03-15",creator:"楓花",       tlManager:"めい",  status:"未着手",  note:"",link:""},
+  {id:"5",title:"メンバーインタビュー",  date:"2026-03-18",creator:"",           tlManager:"",      status:"未着手",  note:"",link:""},
+  {id:"6",title:"最終入会締切リマインド",date:"2026-03-22",creator:"もあな",     tlManager:"あや",  status:"未着手",  note:"ストーリーズも",link:""},
+];
 
-    /* ── Shared styles ── */
-    const ml = {fontSize:9,fontWeight:700,color:"#8A8070",letterSpacing:"0.1em",fontFamily:"'DM Mono',monospace",marginBottom:4};
-    const ss = {background:"#F5F0E8",border:"1.5px solid #C4B89A",borderRadius:1,padding:"7px 9px",fontSize:12,fontFamily:"'Noto Sans JP',sans-serif",fontWeight:500,color:"#111108",width:"100%"};
-    const btnBase = {padding:"7px 14px",borderRadius:1,fontSize:12,cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontWeight:700,transition:"all 0.12s",border:"none"};
+/* ── Helpers ── */
+const todayStr  = () => new Date().toISOString().slice(0,10);
+const daysUntil = d  => Math.ceil((new Date(d) - new Date(todayStr())) / 86400000);
+const initial   = n  => n ? n.slice(0,1) : "?";
+const uid       = () => String(Date.now()) + String(Math.floor(Math.random()*10000));
 
-    /* ── Avatar ── */
-    function Av({name,members,size=26}){
-    const c=AV_COLORS[members.indexOf(name)%AV_COLORS.length]||"#8A8070";
-    return (
-        <div style={{width:size,height:size,borderRadius:"50%",background:c,color:"#fff",
-        fontSize:size*0.42,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",
-        fontFamily:"'DM Mono',monospace",border:"1.5px solid #111",flexShrink:0}}>
-        {initial(name)}
+const urgency = (du, status) => {
+  const done = ["完成","投稿済み"].includes(status);
+  const past = du < 0 && !done;
+  if (done)        return {rowBg:"transparent",    left:"none",              labelColor:"#C4B89A", labelText:null};
+  if (past)        return {rowBg:"transparent",    left:"none",              labelColor:"#C4B89A", labelText:"PAST"};
+  if (du === 0)    return {rowBg:"#FFF0F0",        left:"4px solid #B8000F", labelColor:"#B8000F", labelText:"TODAY"};
+  if (du <= 2)     return {rowBg:"#FFF4ED",        left:"4px solid #D4620A", labelColor:"#D4620A", labelText:`${du}日後`};
+  if (du <= 5)     return {rowBg:"#FFFBE8",        left:"4px solid #D4A017", labelColor:"#D4A017", labelText:`${du}日後`};
+  if (du <= 7)     return {rowBg:"#FAFFF0",        left:"4px solid #8AC020", labelColor:"#8AC020", labelText:`${du}日後`};
+  return           {rowBg:"transparent",           left:"none",              labelColor:"#8A8070", labelText:null};
+};
+
+function useWindowWidth(){
+  const [w,setW]=useState(()=>typeof window!=="undefined"?window.innerWidth:1200);
+  useEffect(()=>{
+    const handler=()=>setW(window.innerWidth);
+    window.addEventListener("resize",handler);
+    return ()=>window.removeEventListener("resize",handler);
+  },[]);
+  return w;
+}
+
+const ml = {fontSize:9,fontWeight:700,color:"#8A8070",letterSpacing:"0.1em",fontFamily:"'DM Mono',monospace",marginBottom:4};
+const ss = {background:"#F5F0E8",border:"1.5px solid #C4B89A",borderRadius:1,padding:"7px 9px",fontSize:12,fontFamily:"'Noto Sans JP',sans-serif",fontWeight:500,color:"#111108",width:"100%"};
+const btnBase = {padding:"7px 14px",borderRadius:1,fontSize:12,cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontWeight:700,transition:"all 0.12s",border:"none"};
+
+/* ── Loading Screen ── */
+function LoadingScreen({message}){
+  return (
+    <div style={{minHeight:"100dvh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"#F5F0E8",gap:16}}>
+      <div style={{
+        width:32,height:32,border:"3px solid #C4B89A",borderTopColor:"#111",borderRadius:"50%",
+        animation:"spin 0.7s linear infinite"
+      }}/>
+      <div style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#8A8070",letterSpacing:"0.1em"}}>
+        {message||"LOADING..."}
+      </div>
+    </div>
+  );
+}
+
+/* ── Login Screen ── */
+function LoginScreen({onLogin, error}){
+  return (
+    <div style={{minHeight:"100dvh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"#F5F0E8",padding:24,gap:0}}>
+      <div style={{width:"100%",maxWidth:380,border:"2px solid #111",borderRadius:1,boxShadow:"6px 6px 0 #111",overflow:"hidden"}}>
+        {/* Header photo */}
+        <div style={{height:80,overflow:"hidden",position:"relative"}}>
+          <img src={PHOTOS.overview} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"brightness(0.45)"}}/>
+          <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
+            <div style={{background:"#111",color:"#F5F0E8",padding:"3px 10px",fontFamily:"'DM Mono',monospace",fontSize:10,fontWeight:900,letterSpacing:"0.12em",borderRadius:1}}>MKT</div>
+            <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:16,fontWeight:900,color:"#fff"}}>新歓期 投稿管理</div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"rgba(255,255,255,0.5)",letterSpacing:"0.1em"}}>AIESEC HI MARKETING</div>
+          </div>
         </div>
-    );
+
+        <div style={{padding:"28px 24px",background:"#F5F0E8",display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#111108",marginBottom:6}}>ログインして続ける</div>
+            <div style={{fontSize:11,color:"#8A8070",lineHeight:1.6}}>
+              <span style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#1a6bff",border:"1px solid #1a6bff",padding:"1px 5px",borderRadius:1}}>@aiesec.jp</span>
+              {" "}アカウントでのみログインできます
+            </div>
+          </div>
+
+          {error&&(
+            <div style={{width:"100%",padding:"9px 12px",background:"#FFF0E0",border:"1.5px solid #D4620A",borderRadius:1,fontSize:11,color:"#D4620A",fontWeight:700,textAlign:"center"}}>
+              ⚠ {error}
+            </div>
+          )}
+
+          <button onClick={onLogin} className="bh" style={{
+            display:"flex",alignItems:"center",gap:10,
+            background:"#fff",border:"2px solid #111",borderRadius:1,
+            padding:"11px 20px",cursor:"pointer",width:"100%",justifyContent:"center",
+            boxShadow:"3px 3px 0 #111",transition:"all 0.12s",
+          }}>
+            {/* Google icon */}
+            <svg width="16" height="16" viewBox="0 0 18 18">
+              <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
+              <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+              <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
+              <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+            </svg>
+            <span style={{fontSize:13,fontWeight:700,color:"#111108",fontFamily:"'Noto Sans JP',sans-serif"}}>
+              Googleでログイン
+            </span>
+          </button>
+
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#C4B89A",letterSpacing:"0.08em",textAlign:"center"}}>
+            AIESEC HI Mkt メンバー限定
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Avatar ── */
+function Av({name,members,size=26}){
+  const c=AV_COLORS[members.indexOf(name)%AV_COLORS.length]||"#8A8070";
+  return (
+    <div style={{width:size,height:size,borderRadius:"50%",background:c,color:"#fff",
+      fontSize:size*0.42,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",
+      fontFamily:"'DM Mono',monospace",border:"1.5px solid #111",flexShrink:0}}>
+      {initial(name)}
+    </div>
+  );
+}
+
+/* ── Status Pill ── */
+function SPill({status,onChange}){
+  const [open,setOpen]=useState(false);
+  const [pos,setPos]=useState({top:0,left:0});
+  const ref=useRef(null);
+  const m=SM[status]||SM["未着手"];
+
+  const toggle=e=>{
+    e.stopPropagation();
+    if(!open){
+      const r=ref.current.getBoundingClientRect();
+      const dropW=180;
+      const left=Math.min(r.left, window.innerWidth-dropW-8);
+      setPos({top:r.bottom+4,left:Math.max(8,left)});
     }
+    setOpen(o=>!o);
+  };
 
-    /* ── Status Pill (portal dropdown) ── */
-    function SPill({status,onChange}){
-    const [open,setOpen]=useState(false);
-    const [pos,setPos]=useState({top:0,left:0,width:0});
-    const ref=useRef(null);
-    const m=SM[status]||SM["未着手"];
-
-    const toggle=e=>{
-        e.stopPropagation();
-        if(!open){
-        const r=ref.current.getBoundingClientRect();
-        const dropW=180;
-        const left=Math.min(r.left, window.innerWidth-dropW-8);
-        setPos({top:r.bottom+4,left:Math.max(8,left)});
-        }
-        setOpen(o=>!o);
+  useEffect(()=>{
+    if(!open) return;
+    const h=e=>{
+      const portal=document.getElementById("spill-dd");
+      if(ref.current?.contains(e.target)||portal?.contains(e.target)) return;
+      setOpen(false);
     };
+    document.addEventListener("mousedown",h);
+    document.addEventListener("touchstart",h);
+    return ()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
+  },[open]);
 
-    useEffect(()=>{
-        if(!open) return;
-        const h=e=>{
-        const portal=document.getElementById("spill-dd");
-        if(ref.current?.contains(e.target)||portal?.contains(e.target)) return;
-        setOpen(false);
-        };
-        document.addEventListener("mousedown",h);
-        document.addEventListener("touchstart",h);
-        return ()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
-    },[open]);
-
-    return (
-        <>
-        <div ref={ref} onClick={toggle} style={{
-            display:"inline-flex",alignItems:"center",gap:5,padding:"4px 9px",
-            border:"1.5px solid #111",borderRadius:1,fontSize:10,fontWeight:700,
-            cursor:"pointer",background:m.bg,color:m.color,letterSpacing:"0.04em",
-            fontFamily:"'Noto Sans JP',sans-serif",whiteSpace:"nowrap",userSelect:"none",
+  return (
+    <>
+      <div ref={ref} onClick={toggle} style={{
+        display:"inline-flex",alignItems:"center",gap:5,padding:"4px 9px",
+        border:"1.5px solid #111",borderRadius:1,fontSize:10,fontWeight:700,
+        cursor:"pointer",background:m.bg,color:m.color,letterSpacing:"0.04em",
+        fontFamily:"'Noto Sans JP',sans-serif",whiteSpace:"nowrap",userSelect:"none",
+      }}>
+        <span style={{width:6,height:6,borderRadius:"50%",background:m.dot,flexShrink:0}}/>
+        {status}
+        <span style={{fontSize:8,opacity:0.5,marginLeft:1}}>▾</span>
+      </div>
+      {open&&ReactDOM.createPortal(
+        <div id="spill-dd" style={{
+          position:"fixed",top:pos.top,left:pos.left,zIndex:9999,
+          background:"#F5F0E8",border:"1.5px solid #111",borderRadius:1,
+          minWidth:180,boxShadow:"3px 3px 0 #111",animation:"slideDown 0.12s ease",
         }}>
-            <span style={{width:6,height:6,borderRadius:"50%",background:m.dot,flexShrink:0}}/>
-            {status}
-            <span style={{fontSize:8,opacity:0.5,marginLeft:1}}>▾</span>
-        </div>
-        {open&&ReactDOM.createPortal(
-            <div id="spill-dd" style={{
-            position:"fixed",top:pos.top,left:pos.left,zIndex:9999,
-            background:"#F5F0E8",border:"1.5px solid #111",borderRadius:1,
-            minWidth:180,boxShadow:"3px 3px 0 #111",animation:"slideDown 0.12s ease",
+          {STATUSES.map(s=>(
+            <div key={s} onClick={e=>{e.stopPropagation();onChange(s);setOpen(false);}} className="rh" style={{
+              padding:"9px 12px",fontSize:11,fontWeight:700,cursor:"pointer",
+              color:SM[s].color,borderBottom:"1px solid #E8E2D6",
+              display:"flex",alignItems:"center",gap:7,
+              background:s===status?"#EDE7D9":"transparent",
             }}>
-            {STATUSES.map(s=>(
-                <div key={s} onClick={e=>{e.stopPropagation();onChange(s);setOpen(false);}} className="rh" style={{
-                padding:"9px 12px",fontSize:11,fontWeight:700,cursor:"pointer",
-                color:SM[s].color,borderBottom:"1px solid #E8E2D6",
-                display:"flex",alignItems:"center",gap:7,
-                background:s===status?"#EDE7D9":"transparent",
-                }}>
-                <span style={{width:6,height:6,borderRadius:"50%",background:SM[s].dot,flexShrink:0}}/>
-                {s}
-                {s===status&&<span style={{marginLeft:"auto",fontSize:9,color:"#8A8070",fontWeight:400}}>✓</span>}
-                </div>
-            ))}
-            </div>,
-            document.body
-        )}
-        </>
-    );
-    }
+              <span style={{width:6,height:6,borderRadius:"50%",background:SM[s].dot,flexShrink:0}}/>
+              {s}
+              {s===status&&<span style={{marginLeft:"auto",fontSize:9,color:"#8A8070",fontWeight:400}}>✓</span>}
+            </div>
+          ))}
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
 
-    /* ── Member select ── */
-    function MemberSel({value,onChange,members,label}){
-    return (
+/* ── Member select ── */
+function MemberSel({value,onChange,members,label}){
+  return (
+    <div>
+      {label&&<div style={ml}>{label}</div>}
+      <select value={value} onChange={e=>onChange(e.target.value)} style={ss}>
+        <option value="">未割当</option>
+        {members.map(m=><option key={m} value={m}>{m}</option>)}
+      </select>
+    </div>
+  );
+}
+
+/* ── Link Preview ── */
+function LinkPreview({url}){
+  if(!url) return null;
+  const isImage  = /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(url);
+  const isDrive  = url.includes("drive.google.com");
+  const isSlides = url.includes("docs.google.com/presentation");
+  const isSheets = url.includes("docs.google.com/spreadsheets");
+  const isDoc    = url.includes("docs.google.com/document");
+  const isCanva  = url.includes("canva.com");
+  const isFigma  = url.includes("figma.com");
+  const label = isCanva?"Canva":isFigma?"Figma":isSlides?"Slides":isSheets?"Sheets":isDoc?"Docs":isDrive?"Drive":isImage?"IMAGE":"LINK";
+  const lc    = isCanva?"#7D2AE8":isFigma?"#1A1A1A":isSlides?"#F4B400":isSheets?"#0F9D58":isDoc||isDrive?"#4285F4":"#8A8070";
+  const driveEmbed=()=>{
+    const m=url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if(m) return `https://drive.google.com/file/d/${m[1]}/preview`;
+    return url.replace("/edit","").replace("?usp=sharing","")+"?embedded=true";
+  };
+  const canEmbed=(isDrive||isSlides||isSheets||isDoc)&&!isCanva;
+  const embedUrl=canEmbed?driveEmbed():null;
+  const hostname=(()=>{try{return new URL(url).hostname.replace("www.","");}catch{return url;}})();
+  return (
+    <div style={{marginTop:10,border:"1.5px solid #C4B89A",borderRadius:1,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:"#EDE7D9",borderBottom:"1px solid #C4B89A"}}>
+        <span style={{fontSize:8,fontFamily:"'DM Mono',monospace",fontWeight:700,color:lc,border:`1px solid ${lc}55`,padding:"1px 6px",borderRadius:1,flexShrink:0}}>{label}</span>
+        <span style={{flex:1,fontSize:10,color:"#8A8070",fontFamily:"'DM Mono',monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{hostname}</span>
+        <a href={url} target="_blank" rel="noopener noreferrer" style={{fontSize:9,padding:"2px 8px",border:"1px solid #1a6bff",borderRadius:1,color:"#1a6bff",textDecoration:"none",fontFamily:"'DM Mono',monospace",fontWeight:700,flexShrink:0,background:"#E8F0FF"}}>開く</a>
+      </div>
+      {isImage?(
+        <img src={url} alt="preview" style={{width:"100%",maxHeight:280,objectFit:"contain",display:"block",background:"#f9f9f9"}}
+          onError={e=>{e.target.parentNode.innerHTML='<div style="padding:12px;text-align:center;font-size:11px;color:#C4B89A">読み込めませんでした</div>';}}/>
+      ):embedUrl?(
+        <div style={{position:"relative",width:"100%",paddingTop:"56.25%",background:"#f0f0f0"}}>
+          <iframe src={embedUrl} style={{position:"absolute",inset:0,width:"100%",height:"100%",border:"none"}} allow="autoplay"/>
+        </div>
+      ):(
+        <a href={url} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",textDecoration:"none",background:"#FAFAF8"}}>
+          <div style={{overflow:"hidden",flex:1}}>
+            <div style={{fontSize:11,fontWeight:700,color:lc,marginBottom:2,fontFamily:"'DM Mono',monospace"}}>{label}</div>
+            <div style={{fontSize:10,color:"#8A8070",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{url}</div>
+          </div>
+          <span style={{fontSize:13,color:"#C4B89A",flexShrink:0}}>↗</span>
+        </a>
+      )}
+    </div>
+  );
+}
+
+/* ── Expanded post panel ── */
+function ExpandedPanel({p,update,del,onClose,members}){
+  return (
+    <div onClick={e=>e.stopPropagation()} style={{
+      padding:"14px 14px 16px",borderTop:"1px dashed #C4B89A",
+      display:"flex",flexDirection:"column",gap:12,
+    }}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <MemberSel label="作成担当"   value={p.creator}   onChange={v=>update(p.id,"creator",v)}   members={members}/>
+        <MemberSel label="TL管理担当" value={p.tlManager} onChange={v=>update(p.id,"tlManager",v)} members={members}/>
         <div>
-        {label&&<div style={ml}>{label}</div>}
-        <select value={value} onChange={e=>onChange(e.target.value)} style={ss}>
-            <option value="">未割当</option>
-            {members.map(m=><option key={m} value={m}>{m}</option>)}
-        </select>
-        </div>
-    );
-    }
-
-    /* ── Link Preview ── */
-    function LinkPreview({url}){
-    if(!url) return null;
-    const isImage  = /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(url);
-    const isDrive  = url.includes("drive.google.com");
-    const isSlides = url.includes("docs.google.com/presentation");
-    const isSheets = url.includes("docs.google.com/spreadsheets");
-    const isDoc    = url.includes("docs.google.com/document");
-    const isCanva  = url.includes("canva.com");
-    const isFigma  = url.includes("figma.com");
-
-    const label = isCanva?"Canva":isFigma?"Figma":isSlides?"Slides":isSheets?"Sheets":isDoc?"Docs":isDrive?"Drive":isImage?"IMAGE":"LINK";
-    const lc    = isCanva?"#7D2AE8":isFigma?"#1A1A1A":isSlides?"#F4B400":isSheets?"#0F9D58":isDoc||isDrive?"#4285F4":"#8A8070";
-
-    const driveEmbed=()=>{
-        const m=url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-        if(m) return `https://drive.google.com/file/d/${m[1]}/preview`;
-        return url.replace("/edit","").replace("?usp=sharing","")+"?embedded=true";
-    };
-    const canEmbed=(isDrive||isSlides||isSheets||isDoc)&&!isCanva;
-    const embedUrl=canEmbed?driveEmbed():null;
-    const hostname=(()=>{try{return new URL(url).hostname.replace("www.","");}catch{return url;}})();
-
-    return (
-        <div style={{marginTop:10,border:"1.5px solid #C4B89A",borderRadius:1,overflow:"hidden"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:"#EDE7D9",borderBottom:"1px solid #C4B89A"}}>
-            <span style={{fontSize:8,fontFamily:"'DM Mono',monospace",fontWeight:700,color:lc,border:`1px solid ${lc}55`,padding:"1px 6px",borderRadius:1,flexShrink:0}}>{label}</span>
-            <span style={{flex:1,fontSize:10,color:"#8A8070",fontFamily:"'DM Mono',monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{hostname}</span>
-            <a href={url} target="_blank" rel="noopener noreferrer" style={{fontSize:9,padding:"2px 8px",border:"1px solid #1a6bff",borderRadius:1,color:"#1a6bff",textDecoration:"none",fontFamily:"'DM Mono',monospace",fontWeight:700,flexShrink:0,background:"#E8F0FF"}}>開く</a>
-        </div>
-        {isImage?(
-            <img src={url} alt="preview" style={{width:"100%",maxHeight:280,objectFit:"contain",display:"block",background:"#f9f9f9"}}
-            onError={e=>{e.target.parentNode.innerHTML='<div style="padding:12px;text-align:center;font-size:11px;color:#C4B89A">読み込めませんでした</div>';}}/>
-        ):embedUrl?(
-            <div style={{position:"relative",width:"100%",paddingTop:"56.25%",background:"#f0f0f0"}}>
-            <iframe src={embedUrl} style={{position:"absolute",inset:0,width:"100%",height:"100%",border:"none"}} allow="autoplay"/>
-            </div>
-        ):(
-            <a href={url} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",textDecoration:"none",background:"#FAFAF8"}}>
-            <div style={{overflow:"hidden",flex:1}}>
-                <div style={{fontSize:11,fontWeight:700,color:lc,marginBottom:2,fontFamily:"'DM Mono',monospace"}}>{label}</div>
-                <div style={{fontSize:10,color:"#8A8070",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{url}</div>
-            </div>
-            <span style={{fontSize:13,color:"#C4B89A",flexShrink:0}}>↗</span>
-            </a>
-        )}
-        </div>
-    );
-    }
-
-    /* ── Expanded post panel (shared by list/card) ── */
-    function ExpandedPanel({p,update,del,onClose,members}){
-    return (
-        <div onClick={e=>e.stopPropagation()} style={{
-        padding:"14px 14px 16px",borderTop:"1px dashed #C4B89A",
-        display:"flex",flexDirection:"column",gap:12,
-        }}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <MemberSel label="作成担当"   value={p.creator}   onChange={v=>update(p.id,"creator",v)}   members={members}/>
-            <MemberSel label="TL管理担当" value={p.tlManager} onChange={v=>update(p.id,"tlManager",v)} members={members}/>
-            <div>
-            <div style={ml}>投稿日</div>
-            <input type="date" value={p.date} onChange={e=>update(p.id,"date",e.target.value)} style={ss}/>
-            </div>
-            <div>
-            <div style={ml}>ステータス変更</div>
-            <select value={p.status} onChange={e=>update(p.id,"status",e.target.value)} style={ss}>
-                {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
-            </div>
+          <div style={ml}>投稿日</div>
+          <input type="date" value={p.date} onChange={e=>update(p.id,"date",e.target.value)} style={ss}/>
         </div>
         <div>
-            <div style={ml}>メモ・備考</div>
-            <input value={p.note} onChange={e=>update(p.id,"note",e.target.value)}
-            placeholder="詳細・注意事項など..." style={ss}/>
+          <div style={ml}>ステータス変更</div>
+          <select value={p.status} onChange={e=>update(p.id,"status",e.target.value)} style={ss}>
+            {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
-        <div>
-            <div style={ml}>投稿リンク / ファイルURL</div>
-            <input value={p.link||""} onChange={e=>update(p.id,"link",e.target.value)}
-            placeholder="https://... (Google Drive, Canva, Figma など)" style={ss}/>
-            <LinkPreview url={(p.link||"").trim()}/>
+      </div>
+      <div>
+        <div style={ml}>メモ・備考</div>
+        <input value={p.note} onChange={e=>update(p.id,"note",e.target.value)}
+          placeholder="詳細・注意事項など..." style={ss}/>
+      </div>
+      <div>
+        <div style={ml}>投稿リンク / ファイルURL</div>
+        <input value={p.link||""} onChange={e=>update(p.id,"link",e.target.value)}
+          placeholder="https://... (Google Drive, Canva, Figma など)" style={ss}/>
+        <LinkPreview url={(p.link||"").trim()}/>
+      </div>
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end",paddingTop:4}}>
+        <button onClick={()=>del(p.id)} className="bh" style={{...btnBase,background:"#FFF0E0",border:"1.5px solid #D4620A",color:"#D4620A",fontSize:11}}>削除</button>
+        <button onClick={onClose} className="bh" style={{...btnBase,background:"#111108",border:"1.5px solid #111",color:"#F5F0E8",fontSize:11}}>閉じる</button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Photo Banner ── */
+function PhotoBanner({src,children}){
+  return (
+    <div style={{height:52,overflow:"hidden",borderBottom:"2px solid #111",position:"relative",flexShrink:0}}>
+      <img src={src} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"brightness(0.55)"}}/>
+      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",padding:"0 14px",justifyContent:"space-between"}}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ── List View ── */
+function ListView({posts,update,del,searchQ,members,isMobile}){
+  const [exp,setExp]=useState(null);
+  const fp=useMemo(()=>posts.filter(p=>
+    p.title.includes(searchQ)||p.creator.includes(searchQ)||p.tlManager.includes(searchQ)
+  ),[posts,searchQ]);
+
+  return (
+    <div>
+      <PhotoBanner src={PHOTOS.listBg}>
+        <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#fff",fontWeight:700}}>{fp.length} 件</span>
+        <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"rgba(255,255,255,0.55)",letterSpacing:"0.08em"}}>LIST VIEW</span>
+      </PhotoBanner>
+      {!isMobile&&(
+        <div style={{display:"grid",gridTemplateColumns:"76px 1fr 110px 110px 170px 28px",
+          padding:"6px 14px",borderBottom:"2px solid #111",background:"#EDE7D9"}}>
+          {["DATE","TITLE","作成担当","TL管理","STATUS",""].map(h=>(
+            <div key={h} style={{fontSize:9,fontWeight:700,color:"#8A8070",letterSpacing:"0.1em",fontFamily:"'DM Mono',monospace",padding:"0 2px"}}>{h}</div>
+          ))}
         </div>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end",paddingTop:4}}>
-            <button onClick={()=>del(p.id)} className="bh" style={{...btnBase,background:"#FFF0E0",border:"1.5px solid #D4620A",color:"#D4620A",fontSize:11}}>削除</button>
-            <button onClick={onClose} className="bh" style={{...btnBase,background:"#111108",border:"1.5px solid #111",color:"#F5F0E8",fontSize:11}}>閉じる</button>
-        </div>
-        </div>
-    );
-    }
-
-    /* ── Section photo banner ── */
-    function PhotoBanner({src,children}){
-    return (
-        <div style={{height:52,overflow:"hidden",borderBottom:"2px solid #111",position:"relative",flexShrink:0}}>
-        <img src={src} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"brightness(0.55)"}}/>
-        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",padding:"0 14px",justifyContent:"space-between"}}>
-            {children}
-        </div>
-        </div>
-    );
-    }
-
-    /* ── List View ── */
-    function ListView({posts,update,del,searchQ,members,isMobile}){
-    const [exp,setExp]=useState(null);
-    const fp=useMemo(()=>posts.filter(p=>
-        p.title.includes(searchQ)||p.creator.includes(searchQ)||p.tlManager.includes(searchQ)
-    ),[posts,searchQ]);
-
-    return (
-        <div>
-        <PhotoBanner src={PHOTOS.listBg}>
-            <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#fff",fontWeight:700}}>{fp.length} 件</span>
-            <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"rgba(255,255,255,0.55)",letterSpacing:"0.08em"}}>LIST VIEW</span>
-        </PhotoBanner>
-
-        {/* Header row — desktop only */}
-        {!isMobile&&(
-            <div style={{display:"grid",gridTemplateColumns:"76px 1fr 110px 110px 170px 28px",
-            padding:"6px 14px",borderBottom:"2px solid #111",background:"#EDE7D9"}}>
-            {["DATE","TITLE","作成担当","TL管理","STATUS",""].map(h=>(
-                <div key={h} style={{fontSize:9,fontWeight:700,color:"#8A8070",letterSpacing:"0.1em",fontFamily:"'DM Mono',monospace",padding:"0 2px"}}>{h}</div>
-            ))}
-            </div>
-        )}
-
-        {fp.length===0&&(
-            <div style={{padding:"48px 20px",textAlign:"center",color:"#C4B89A",fontSize:13}}>投稿が見つかりません</div>
-        )}
-
-        {fp.map((p,i)=>{
-            const du=daysUntil(p.date);
-            const urg=urgency(du,p.status);
-            const isExp=exp===p.id;
-
-            return (
-            <div key={p.id} style={{
-                borderBottom:"1px solid #E8E2D6",
-                borderLeft:isExp?"4px solid #111":urg.left,
-                background:isExp?"#EDE7D9":urg.rowBg,
-                transition:"background 0.3s, border-left 0.3s",
-                animation:`fadeIn 0.15s ease ${Math.min(i*0.035,0.25)}s both`,
-            }}>
-
-                {/* ── Mobile card ── */}
-                {isMobile?(
-                <div onClick={()=>setExp(isExp?null:p.id)} style={{padding:"12px 14px",cursor:"pointer"}}>
-                    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:7}}>
-                    <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:14,fontWeight:700,
-                        color:urg.left==="none"&&du<0?"#C4B89A":"#111108",
-                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                        {p.link&&<span style={{fontSize:8,marginRight:5,color:"#1a6bff",border:"1px solid #1a6bff",padding:"1px 3px",borderRadius:1,fontFamily:"'DM Mono',monospace",fontWeight:700,verticalAlign:"middle"}}>URL</span>}
-                        {p.title}
-                        </div>
-                        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:5,flexWrap:"wrap"}}>
-                        <span style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:urg.labelColor,fontWeight:700}}>
-                            {p.date.slice(5).replace("-","/")}
-                            {urg.labelText&&<span className={du===0?"today-pulse":""} style={{marginLeft:4,background:urg.labelColor,color:"#fff",padding:"1px 5px",borderRadius:1,fontSize:8}}>{urg.labelText}</span>}
-                        </span>
-                        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                            {p.creator&&<span style={{fontSize:10,color:"#444"}}>{p.creator}</span>}
-                            {p.tlManager&&<><span style={{color:"#C4B89A",fontSize:9}}>/ TL:</span><span style={{fontSize:10,color:"#444"}}>{p.tlManager}</span></>}
-                        </div>
-                        </div>
+      )}
+      {fp.length===0&&(
+        <div style={{padding:"48px 20px",textAlign:"center",color:"#C4B89A",fontSize:13}}>投稿が見つかりません</div>
+      )}
+      {fp.map((p,i)=>{
+        const du=daysUntil(p.date);
+        const urg=urgency(du,p.status);
+        const isExp=exp===p.id;
+        return (
+          <div key={p.id} style={{
+            borderBottom:"1px solid #E8E2D6",
+            borderLeft:isExp?"4px solid #111":urg.left,
+            background:isExp?"#EDE7D9":urg.rowBg,
+            transition:"background 0.3s, border-left 0.3s",
+            animation:`fadeIn 0.15s ease ${Math.min(i*0.035,0.25)}s both`,
+          }}>
+            {isMobile?(
+              <div onClick={()=>setExp(isExp?null:p.id)} style={{padding:"12px 14px",cursor:"pointer"}}>
+                <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:7}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:14,fontWeight:700,
+                      color:urg.left==="none"&&du<0?"#C4B89A":"#111108",
+                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      {p.link&&<span style={{fontSize:8,marginRight:5,color:"#1a6bff",border:"1px solid #1a6bff",padding:"1px 3px",borderRadius:1,fontFamily:"'DM Mono',monospace",fontWeight:700,verticalAlign:"middle"}}>URL</span>}
+                      {p.title}
                     </div>
-                    <div onClick={e=>e.stopPropagation()}>
-                        <SPill status={p.status} onChange={v=>update(p.id,"status",v)}/>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginTop:5,flexWrap:"wrap"}}>
+                      <span style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:urg.labelColor,fontWeight:700}}>
+                        {p.date.slice(5).replace("-","/")}
+                        {urg.labelText&&<span className={du===0?"today-pulse":""} style={{marginLeft:4,background:urg.labelColor,color:"#fff",padding:"1px 5px",borderRadius:1,fontSize:8}}>{urg.labelText}</span>}
+                      </span>
+                      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                        {p.creator&&<span style={{fontSize:10,color:"#444"}}>{p.creator}</span>}
+                        {p.tlManager&&<><span style={{color:"#C4B89A",fontSize:9}}>/ TL:</span><span style={{fontSize:10,color:"#444"}}>{p.tlManager}</span></>}
+                      </div>
                     </div>
-                    </div>
-                </div>
-                ):(
-                /* ── Desktop row ── */
-                <div className={isExp?"":"rh"} onClick={()=>setExp(isExp?null:p.id)} style={{
-                    display:"grid",gridTemplateColumns:"76px 1fr 110px 110px 170px 28px",
-                    padding:"11px 14px",cursor:"pointer",alignItems:"center",
-                }}>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:500,padding:"0 2px"}}>
-                    <div style={{color:urg.labelColor}}>{p.date.slice(5).replace("-","/")}</div>
-                    {urg.labelText&&(
-                        <div className={du===0?"today-pulse":""} style={{
-                        fontSize:8,fontWeight:700,marginTop:2,
-                        background:urg.labelColor,color:"#fff",
-                        padding:"1px 4px",borderRadius:1,display:"inline-block",
-                        }}>{urg.labelText}</div>
-                    )}
-                    </div>
-                    <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:13,fontWeight:700,
-                    color:du<0&&p.status!=="投稿済み"?"#C4B89A":"#111108",
-                    padding:"0 4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                    {p.link&&<span style={{fontSize:8,marginRight:5,color:"#1a6bff",border:"1px solid #1a6bff",padding:"1px 3px",borderRadius:1,fontFamily:"'DM Mono',monospace",fontWeight:700,verticalAlign:"middle"}}>URL</span>}
-                    {p.title}
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",gap:5,padding:"0 4px"}}>
-                    {p.creator?<><Av name={p.creator} members={members} size={20}/><span style={{fontSize:11}}>{p.creator}</span></>:<span style={{fontSize:11,color:"#C4B89A"}}>—</span>}
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",gap:5,padding:"0 4px"}}>
-                    {p.tlManager?<><Av name={p.tlManager} members={members} size={20}/><span style={{fontSize:11}}>{p.tlManager}</span></>:<span style={{fontSize:11,color:"#C4B89A"}}>—</span>}
-                    </div>
-                    <div style={{padding:"0 4px"}} onClick={e=>e.stopPropagation()}>
+                  </div>
+                  <div onClick={e=>e.stopPropagation()}>
                     <SPill status={p.status} onChange={v=>update(p.id,"status",v)}/>
-                    </div>
-                    <div style={{textAlign:"center",color:"#8A8070",fontSize:15,transition:"transform 0.15s",transform:isExp?"rotate(90deg)":"none"}}>›</div>
+                  </div>
                 </div>
-                )}
-
-                {isExp&&<ExpandedPanel p={p} update={update} del={del} onClose={()=>setExp(null)} members={members}/>}
-            </div>
-            );
-        })}
-        </div>
-    );
-    }
-
-    /* ── Kanban View ── */
-    function KanbanView({posts,update,members,isMobile}){
-    return (
-        <div style={{display:"flex",flexDirection:"column",height:"calc(100dvh - 100px)"}}>
-        <PhotoBanner src={PHOTOS.kanban}>
-            <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#fff",fontWeight:700}}>KANBAN</span>
-            <div style={{display:"flex",gap:5,flexWrap:"wrap",justifyContent:"flex-end"}}>
-            {STATUSES.map(s=>{const c=posts.filter(p=>p.status===s).length;return c>0?(<span key={s} style={{fontSize:8,padding:"2px 6px",borderRadius:1,background:SM[s].bg+"cc",color:SM[s].color,border:`1px solid ${SM[s].dot}`,fontWeight:700}}>{s} {c}</span>):null;})}
-            </div>
-        </PhotoBanner>
-        <div style={{flex:1,display:"flex",overflowX:"auto",borderTop:"none"}}>
-            {STATUSES.map((lane,li)=>{
-            const m=SM[lane];
-            const lp=posts.filter(p=>p.status===lane);
-            return (
-                <div key={lane} style={{
-                minWidth:isMobile?160:200,flex:1,
-                borderRight:li<STATUSES.length-1?"2px solid #111":"none",
-                display:"flex",flexDirection:"column",overflow:"hidden",
-                }}>
-                <div style={{padding:"8px 10px",borderBottom:"2px solid #111",background:m.bg,
-                    display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-                    <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,fontWeight:700,color:m.color}}>{lane}</span>
-                    <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:m.color,border:`1.5px solid ${m.dot}`,padding:"1px 5px",borderRadius:1,fontWeight:700}}>{lp.length}</span>
+              </div>
+            ):(
+              <div className={isExp?"":"rh"} onClick={()=>setExp(isExp?null:p.id)} style={{
+                display:"grid",gridTemplateColumns:"76px 1fr 110px 110px 170px 28px",
+                padding:"11px 14px",cursor:"pointer",alignItems:"center",
+              }}>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:500,padding:"0 2px"}}>
+                  <div style={{color:urg.labelColor}}>{p.date.slice(5).replace("-","/")}</div>
+                  {urg.labelText&&(
+                    <div className={du===0?"today-pulse":""} style={{
+                      fontSize:8,fontWeight:700,marginTop:2,
+                      background:urg.labelColor,color:"#fff",
+                      padding:"1px 4px",borderRadius:1,display:"inline-block",
+                    }}>{urg.labelText}</div>
+                  )}
                 </div>
-                <div style={{flex:1,overflowY:"auto",padding:7,display:"flex",flexDirection:"column",gap:6}}>
-                    {lp.map(p=>{
-                    const du=daysUntil(p.date);
-                    const urg=urgency(du,p.status);
-                    return (
-                        <div key={p.id} className="kc" style={{
-                        background:"#F5F0E8",border:"1.5px solid #111",
-                        borderLeft:urg.left!=="none"?urg.left:"1.5px solid #111",
-                        borderRadius:1,padding:"9px 10px",transition:"all 0.12s",
-                        }}>
-                        <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,fontWeight:700,color:"#111108",marginBottom:5,lineHeight:1.4}}>{p.title}</div>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                            <div>
-                            <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:urg.labelColor,fontWeight:700}}>
-                                {p.date.slice(5).replace("-","/")}
-                            </span>
-                            {urg.labelText&&(
-                                <span className={du===0?"today-pulse":""} style={{
-                                marginLeft:4,fontSize:8,fontFamily:"'DM Mono',monospace",fontWeight:700,
-                                background:urg.labelColor,color:"#fff",padding:"1px 4px",borderRadius:1,
-                                }}>{urg.labelText}</span>
-                            )}
-                            </div>
-                            <div style={{display:"flex",gap:2}}>
-                            {p.creator&&<Av name={p.creator} members={members} size={17}/>}
-                            {p.tlManager&&p.tlManager!==p.creator&&<Av name={p.tlManager} members={members} size={17}/>}
-                            </div>
-                        </div>
-                        <select value={p.status} onChange={e=>update(p.id,"status",e.target.value)} style={{
-                            fontSize:9,padding:"3px 5px",border:`1px solid ${m.dot}`,
-                            background:m.bg,color:m.color,borderRadius:1,cursor:"pointer",
-                            fontFamily:"'Noto Sans JP',sans-serif",fontWeight:700,width:"100%",
-                        }}>
-                            {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
-                        </select>
-                        </div>
-                    );
-                    })}
-                    {lp.length===0&&<div style={{color:"#C4B89A",fontSize:11,textAlign:"center",padding:"18px 0"}}>なし</div>}
+                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:13,fontWeight:700,
+                  color:du<0&&p.status!=="投稿済み"?"#C4B89A":"#111108",
+                  padding:"0 4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {p.link&&<span style={{fontSize:8,marginRight:5,color:"#1a6bff",border:"1px solid #1a6bff",padding:"1px 3px",borderRadius:1,fontFamily:"'DM Mono',monospace",fontWeight:700,verticalAlign:"middle"}}>URL</span>}
+                  {p.title}
                 </div>
+                <div style={{display:"flex",alignItems:"center",gap:5,padding:"0 4px"}}>
+                  {p.creator?<><Av name={p.creator} members={members} size={20}/><span style={{fontSize:11}}>{p.creator}</span></>:<span style={{fontSize:11,color:"#C4B89A"}}>—</span>}
                 </div>
-            );
-            })}
-        </div>
-        </div>
-    );
-    }
-
-    /* ── Calendar View ── */
-    function CalView({posts,isMobile}){
-    const [ym,setYm]=useState(()=>{const d=new Date();return{y:d.getFullYear(),m:d.getMonth()};});
-    const first=new Date(ym.y,ym.m,1);
-    const last=new Date(ym.y,ym.m+1,0);
-    const cells=[];
-    for(let i=0;i<first.getDay();i++) cells.push(null);
-    for(let d=1;d<=last.getDate();d++) cells.push(d);
-    const byDay=useMemo(()=>{const r={};posts.forEach(p=>{if(!r[p.date])r[p.date]=[];r[p.date].push(p);});return r;},[posts]);
-    const td=todayStr();
-
-    return (
-        <div>
-        <PhotoBanner src={PHOTOS.calendar}>
-            <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#fff",fontWeight:700}}>CALENDAR</span>
-        </PhotoBanner>
-        <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",borderBottom:"2px solid #111"}}>
-            <button onClick={()=>setYm(p=>({y:p.m===0?p.y-1:p.y,m:p.m===0?11:p.m-1}))}
-            className="bh" style={{...btnBase,padding:"4px 10px",background:"transparent",border:"1.5px solid #111"}}>←</button>
-            <span style={{fontFamily:"'DM Mono',monospace",fontSize:15,fontWeight:700,flex:1,textAlign:"center",letterSpacing:"0.05em"}}>
-            {ym.y}.{String(ym.m+1).padStart(2,"0")}</span>
-            <button onClick={()=>setYm(p=>({y:p.m===11?p.y+1:p.y,m:p.m===11?0:p.m+1}))}
-            className="bh" style={{...btnBase,padding:"4px 10px",background:"transparent",border:"1.5px solid #111"}}>→</button>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1.5px solid #111"}}>
-            {["日","月","火","水","木","金","土"].map((d,i)=>(
-            <div key={d} style={{textAlign:"center",padding:"6px 0",fontSize:isMobile?9:10,fontWeight:700,
-                fontFamily:"'DM Mono',monospace",color:i===0?"#B8000F":i===6?"#1a6bff":"#8A8070",
-                borderRight:i<6?"1px solid #E8E2D6":"none"}}>{d}</div>
-            ))}
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
-            {cells.map((d,i)=>{
-            const key=d?`${ym.y}-${String(ym.m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`:null;
-            const dp=key?byDay[key]||[]:[];
-            const isToday=key===td;
-            const du=key?daysUntil(key):99;
-            const dow=i%7;
-            // Cell urgency bg
-            const hasPending=dp.some(p=>!["完成","投稿済み"].includes(p.status));
-            const cellBg=isToday?"#FFF8EC":!d?"#EDE7D9":hasPending&&du===0?"#FFF0F0":hasPending&&du<=2?"#FFF4ED":hasPending&&du<=5?"#FFFBE8":"transparent";
-            return (
-                <div key={i} style={{minHeight:isMobile?56:76,borderBottom:"1px solid #E8E2D6",
-                borderRight:dow<6?"1px solid #E8E2D6":"none",padding:"4px",background:cellBg}}>
-                {d&&<div style={{fontFamily:"'DM Mono',monospace",fontSize:isMobile?9:10,fontWeight:isToday?700:400,
-                    color:isToday?"#D4620A":dow===0?"#B8000F":dow===6?"#1a6bff":"#8A8070",
-                    width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",
-                    marginBottom:2,background:isToday?"#D4620A22":undefined,borderRadius:1}}>{d}</div>}
-                <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                    {dp.map(p=>(
-                    <div key={p.id} style={{fontSize:isMobile?7:9,fontWeight:700,
-                        background:SM[p.status].bg,color:SM[p.status].color,
-                        border:`1px solid ${SM[p.status].dot}`,borderRadius:1,
-                        padding:"1px 3px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.title}</div>
-                    ))}
+                <div style={{display:"flex",alignItems:"center",gap:5,padding:"0 4px"}}>
+                  {p.tlManager?<><Av name={p.tlManager} members={members} size={20}/><span style={{fontSize:11}}>{p.tlManager}</span></>:<span style={{fontSize:11,color:"#C4B89A"}}>—</span>}
                 </div>
+                <div style={{padding:"0 4px"}} onClick={e=>e.stopPropagation()}>
+                  <SPill status={p.status} onChange={v=>update(p.id,"status",v)}/>
                 </div>
-            );
-            })}
-        </div>
-        </div>
-    );
-    }
-
-    /* ── Capacity View ── */
-    function CapView({capData,setCap,members,isMobile}){
-    return (
-        <div>
-        <div style={{position:"relative",height:100,overflow:"hidden",borderBottom:"2px solid #111"}}>
-            <img src={PHOTOS.capacity} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"brightness(0.6)"}}/>
-            <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",padding:"0 18px",gap:16}}>
-            <div>
-                <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#fff",fontWeight:700,letterSpacing:"0.1em",marginBottom:6}}>CAPACITY CHECK</div>
-                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                {CAPS.map(c=>{
-                    const cnt=members.filter(m=>capData[m]===c).length;
-                    return (
-                    <div key={c} style={{display:"flex",alignItems:"center",gap:3}}>
-                        <span style={{width:6,height:6,borderRadius:"50%",background:CM[c],border:"1px solid rgba(255,255,255,0.5)"}}/>
-                        <span style={{fontSize:9,color:"rgba(255,255,255,0.8)"}}>{c} {cnt}</span>
-                    </div>
-                    );
-                })}
-                </div>
-            </div>
-            <div style={{flex:1,maxWidth:260}}>
-                <div style={{display:"flex",height:6,borderRadius:1,overflow:"hidden",border:"1.5px solid rgba(255,255,255,0.35)"}}>
-                {CAPS.map(c=>{
-                    const cnt=members.filter(m=>capData[m]===c).length;
-                    return <div key={c} style={{flex:cnt||0.01,background:CM[c],transition:"flex 0.4s"}}/>;
-                })}
-                </div>
-            </div>
-            </div>
-        </div>
-        {members.map(m=>{
-            const cap=capData[m]||"普通";
-            return (
-            <div key={m} className="rh" style={{display:"flex",alignItems:"center",gap:isMobile?10:14,
-                padding:isMobile?"10px 12px":"12px 16px",borderBottom:"1px solid #E8E2D6",flexWrap:isMobile?"wrap":"nowrap"}}>
-                <Av name={m} members={members} size={isMobile?28:32}/>
-                <div style={{fontSize:isMobile?13:14,fontWeight:700,color:"#111108",minWidth:isMobile?60:72}}>{m}</div>
-                <div style={{flex:1,display:"flex",gap:5,flexWrap:"wrap"}}>
-                {CAPS.map(c=>{
-                    const active=cap===c;
-                    const cc=CM[c];
-                    return (
-                    <button key={c} onClick={()=>setCap(p=>({...p,[m]:c}))} className="bh" style={{
-                        padding:isMobile?"4px 8px":"5px 11px",
-                        border:`1.5px solid ${active?cc:"#C4B89A"}`,borderRadius:1,
-                        fontSize:isMobile?10:11,fontWeight:active?700:400,cursor:"pointer",
-                        background:active?cc+"22":"transparent",color:active?cc:"#8A8070",transition:"all 0.12s",
-                    }}>{c}</button>
-                    );
-                })}
-                </div>
-                <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,fontWeight:700,color:CM[cap],minWidth:60,textAlign:"right"}}>● {cap}</div>
-            </div>
-            );
-        })}
-        </div>
-    );
-    }
-
-    /* ── Overview ── */
-    function Overview({posts,capData,members,isMobile}){
-    const done=posts.filter(p=>["完成","投稿済み"].includes(p.status)).length;
-    const progress=Math.round(done/posts.length*100)||0;
-    const alertPosts=posts.filter(p=>{const du=daysUntil(p.date);return du>=0&&du<=5&&!["完成","投稿済み"].includes(p.status);}).sort((a,b)=>a.date.localeCompare(b.date));
-    const stats=[
-        {label:"総投稿数",   val:posts.length},
-        {label:"完成+投稿済",val:done},
-        {label:"未着手",     val:posts.filter(p=>p.status==="未着手").length},
-        {label:"担当未割当", val:posts.filter(p=>!p.creator).length},
-    ];
-    return (
-        <div>
-        <div style={{position:"relative",height:isMobile?90:120,overflow:"hidden",borderBottom:"2px solid #111"}}>
-            <img src={PHOTOS.overview} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"brightness(0.5)"}}/>
-            <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",padding:"0 20px",justifyContent:"space-between"}}>
-            <div>
-                <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"rgba(255,255,255,0.55)",letterSpacing:"0.1em",marginBottom:5}}>OVERVIEW</div>
-                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:isMobile?17:22,fontWeight:900,color:"#fff"}}>新歓期 投稿管理</div>
-            </div>
-            <div style={{textAlign:"right"}}>
-                <div style={{fontFamily:"'DM Mono',monospace",fontSize:isMobile?28:36,fontWeight:700,color:"#fff",lineHeight:1}}>{progress}<span style={{fontSize:14}}>%</span></div>
-                <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"rgba(255,255,255,0.55)",marginTop:2}}>COMPLETED</div>
-            </div>
-            </div>
-        </div>
-        <div style={{padding:isMobile?"14px":"20px",display:"flex",flexDirection:"column",gap:16}}>
-            {/* Stats */}
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
-            {stats.map(s=>(
-                <div key={s.label} style={{background:"#F5F0E8",border:"1.5px solid #111",borderRadius:1,padding:"12px 14px",boxShadow:"2px 2px 0 #111"}}>
-                <div style={{fontFamily:"'DM Mono',monospace",fontSize:24,fontWeight:700,color:"#111108",lineHeight:1}}>{s.val}</div>
-                <div style={{fontSize:9,color:"#8A8070",marginTop:5}}>{s.label}</div>
-                </div>
-            ))}
-            </div>
-
-            {/* Progress */}
-            <div style={{border:"1.5px solid #111",borderRadius:1,padding:"13px 15px",boxShadow:"2px 2px 0 #111"}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
-                <span style={{fontSize:11,fontWeight:700}}>全体進捗</span>
-                <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:700,color:"#1A7A3C"}}>{progress}%</span>
-            </div>
-            <div style={{height:8,background:"#E8E2D6",border:"1px solid #C4B89A",borderRadius:1,overflow:"hidden"}}>
-                <div style={{height:"100%",width:`${progress}%`,background:"#2AAF5C",transition:"width 0.5s"}}/>
-            </div>
-            </div>
-
-            {/* Deadline alerts */}
-            {alertPosts.length>0&&(
-            <div style={{border:"1.5px solid #D4620A",borderRadius:1,overflow:"hidden",boxShadow:"2px 2px 0 #111"}}>
-                <div style={{padding:"8px 13px",background:"#FFF0E0",borderBottom:"2px solid #D4620A",
-                fontFamily:"'DM Mono',monospace",fontSize:9,color:"#D4620A",fontWeight:700,letterSpacing:"0.08em"}}>
-                DEADLINE ALERT — {alertPosts.length}件
-                </div>
-                {alertPosts.map(p=>{
-                const du=daysUntil(p.date);
-                const urg=urgency(du,p.status);
-                return (
-                    <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 13px",
-                    borderBottom:"1px solid #F5D5B0",background:urg.rowBg,borderLeft:urg.left}}>
-                    <div className={du===0?"today-pulse":""} style={{fontSize:9,fontFamily:"'DM Mono',monospace",fontWeight:700,
-                        color:"#fff",background:urg.labelColor,padding:"2px 6px",borderRadius:1,flexShrink:0}}>
-                        {urg.labelText||p.date.slice(5).replace("-","/")}
-                    </div>
-                    <span style={{flex:1,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.title}</span>
-                    <span style={{fontSize:10,color:"#8A8070"}}>{p.creator||"—"}</span>
-                    </div>
-                );
-                })}
-            </div>
+                <div style={{textAlign:"center",color:"#8A8070",fontSize:15,transition:"transform 0.15s",transform:isExp?"rotate(90deg)":"none"}}>›</div>
+              </div>
             )}
+            {isExp&&<ExpandedPanel p={p} update={update} del={del} onClose={()=>setExp(null)} members={members}/>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
-            {/* Status breakdown */}
-            <div style={{border:"1.5px solid #111",borderRadius:1,overflow:"hidden",boxShadow:"2px 2px 0 #111"}}>
-            <div style={{padding:"8px 13px",borderBottom:"2px solid #111",fontFamily:"'DM Mono',monospace",fontSize:9,color:"#8A8070",letterSpacing:"0.1em"}}>STATUS BREAKDOWN</div>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(4,1fr)":"repeat(7,1fr)"}}>
-                {STATUSES.map((s,i)=>{
-                const cnt=posts.filter(p=>p.status===s).length;
-                return (
-                    <div key={s} style={{flex:1,padding:"11px 6px",textAlign:"center",borderRight:i<STATUSES.length-1?"1px solid #E8E2D6":"none"}}>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:isMobile?16:20,fontWeight:700,color:SM[s].color}}>{cnt}</div>
-                    <div style={{fontSize:7,color:"#8A8070",marginTop:3,lineHeight:1.3}}>{s}</div>
-                    </div>
-                );
-                })}
-            </div>
-            </div>
-
-            {/* Member assignments */}
-            <div style={{border:"1.5px solid #111",borderRadius:1,overflow:"hidden",boxShadow:"2px 2px 0 #111"}}>
-            <div style={{padding:"8px 13px",borderBottom:"2px solid #111",fontFamily:"'DM Mono',monospace",fontSize:9,color:"#8A8070",letterSpacing:"0.1em"}}>MEMBER ASSIGNMENTS</div>
-            {members.map(m=>{
-                const cr=posts.filter(p=>p.creator===m);
-                const tl=posts.filter(p=>p.tlManager===m);
-                if(!cr.length&&!tl.length) return null;
-                return (
-                <div key={m} className="rh" style={{display:"flex",alignItems:"center",gap:10,padding:"9px 13px",borderBottom:"1px solid #E8E2D6",flexWrap:"wrap"}}>
-                    <Av name={m} members={members} size={26}/>
-                    <span style={{fontSize:12,fontWeight:700,color:"#111108",minWidth:60}}>{m}</span>
-                    <div style={{flex:1,display:"flex",gap:4,flexWrap:"wrap"}}>
-                    {cr.map(p=><span key={p.id} style={{fontSize:9,padding:"2px 5px",borderRadius:1,background:"#E8F0FF",color:"#1a6bff",border:"1px solid #1a6bff",fontWeight:700}}>作 {p.title}</span>)}
-                    {tl.map(p=><span key={p.id} style={{fontSize:9,padding:"2px 5px",borderRadius:1,background:"#E4F5EB",color:"#1A7A3C",border:"1px solid #2AAF5C",fontWeight:700}}>TL {p.title}</span>)}
-                    </div>
-                    <span style={{fontSize:9,fontWeight:700,color:CM[capData[m]||"普通"],fontFamily:"'DM Mono',monospace"}}>{capData[m]||"普通"}</span>
-                </div>
-                );
-            })}
-            </div>
+/* ── Kanban View ── */
+function KanbanView({posts,update,members,isMobile}){
+  return (
+    <div style={{display:"flex",flexDirection:"column",height:"calc(100dvh - 100px)"}}>
+      <PhotoBanner src={PHOTOS.kanban}>
+        <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#fff",fontWeight:700}}>KANBAN</span>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap",justifyContent:"flex-end"}}>
+          {STATUSES.map(s=>{const c=posts.filter(p=>p.status===s).length;return c>0?(<span key={s} style={{fontSize:8,padding:"2px 6px",borderRadius:1,background:SM[s].bg+"cc",color:SM[s].color,border:`1px solid ${SM[s].dot}`,fontWeight:700}}>{s} {c}</span>):null;})}
         </div>
-        </div>
-    );
-    }
-
-    /* ── Modals ── */
-    function ModalShell({onClose,width=460,children}){
-    return (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",
-        display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,
-        padding:"16px",animation:"fadeIn 0.12s ease"}} onClick={onClose}>
-        <div style={{background:"#F5F0E8",border:"2px solid #111",borderRadius:1,
-            width:"100%",maxWidth:width,boxShadow:"6px 6px 0 #111",overflow:"hidden",
-            animation:"slideUp 0.15s ease",maxHeight:"90dvh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
-            {children}
-        </div>
-        </div>
-    );
-    }
-
-    function AddModal({onAdd,onClose,members}){
-    const [f,setF]=useState({title:"",date:"",creator:"",tlManager:"",note:"",link:""});
-    const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-    const ok=f.title&&f.date;
-    return (
-        <ModalShell onClose={onClose} width={460}>
-        <div style={{height:52,overflow:"hidden",position:"relative"}}>
-            <img src={PHOTOS.modal} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"brightness(0.5)"}}/>
-            <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",padding:"0 20px"}}>
-            <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#fff",fontWeight:700,letterSpacing:"0.1em"}}>+ 投稿を追加</span>
-            </div>
-        </div>
-        <div style={{padding:"20px",display:"flex",flexDirection:"column",gap:12}}>
-            <div>
-            <div style={ml}>投稿タイトル *</div>
-            <input value={f.title} onChange={set("title")} placeholder="例: 新歓キックオフ告知" style={ss}/>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div>
-                <div style={ml}>投稿予定日 *</div>
-                <input type="date" value={f.date} onChange={set("date")} style={ss}/>
-            </div>
-            <MemberSel label="作成担当"   value={f.creator}   onChange={v=>setF(p=>({...p,creator:v}))}   members={members}/>
-            <MemberSel label="TL管理担当" value={f.tlManager} onChange={v=>setF(p=>({...p,tlManager:v}))} members={members}/>
-            <div>
-                <div style={ml}>メモ</div>
-                <input value={f.note} onChange={set("note")} placeholder="備考など..." style={ss}/>
-            </div>
-            </div>
-            <div>
-            <div style={ml}>投稿リンク / ファイルURL</div>
-            <input value={f.link} onChange={set("link")} placeholder="https://..." style={ss}/>
-            </div>
-            <div style={{display:"flex",gap:8,justifyContent:"flex-end",paddingTop:4}}>
-            <button onClick={onClose} className="bh" style={{...btnBase,background:"transparent",border:"1.5px solid #C4B89A",color:"#8A8070"}}>キャンセル</button>
-            <button onClick={()=>ok&&onAdd({...f,id:uid(),status:"未着手"})} className="bh" style={{
-                ...btnBase,background:ok?"#111108":"#C4B89A",border:`1.5px solid ${ok?"#111":"#C4B89A"}`,
-                color:"#F5F0E8",cursor:ok?"pointer":"not-allowed",opacity:ok?1:0.6}}>追加する</button>
-            </div>
-        </div>
-        </ModalShell>
-    );
-    }
-
-    function MemberManager({members,setMembers,onClose}){
-    const [newName,setNewName]=useState("");
-    const add=()=>{const n=newName.trim();if(!n||members.includes(n))return;setMembers(p=>[...p,n]);setNewName("");};
-    return (
-        <ModalShell onClose={onClose} width={400}>
-        <div style={{height:48,overflow:"hidden",position:"relative"}}>
-            <img src={PHOTOS.modal} alt="" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:"center 20%",filter:"brightness(0.45)"}}/>
-            <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",padding:"0 18px"}}>
-            <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#fff",fontWeight:700,letterSpacing:"0.1em"}}>MEMBERS — {members.length}人</span>
-            </div>
-        </div>
-        <div style={{padding:"16px 20px",display:"flex",flexDirection:"column",gap:10}}>
-            <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:260,overflowY:"auto"}}>
-            {members.map((m,i)=>(
-                <div key={m} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:"#EDE7D9",border:"1px solid #C4B89A",borderRadius:1}}>
-                <Av name={m} members={members} size={24}/>
-                <span style={{flex:1,fontSize:13,fontWeight:600,color:"#111108"}}>{m}</span>
-                <button onClick={()=>setMembers(p=>p.filter((_,j)=>j!==i))} className="bh" style={{
-                    fontSize:9,padding:"2px 7px",border:"1px solid #D4620A",background:"transparent",
-                    color:"#D4620A",cursor:"pointer",borderRadius:1,fontWeight:700}}>削除</button>
-                </div>
-            ))}
-            </div>
-            <div style={{display:"flex",gap:8}}>
-            <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}
-                placeholder="新しいメンバー名..." style={{...ss,flex:1}}/>
-            <button onClick={add} className="bh" style={{...btnBase,background:"#111108",border:"1.5px solid #111",color:"#F5F0E8",padding:"7px 14px",flexShrink:0}}>追加</button>
-            </div>
-            <div style={{display:"flex",justifyContent:"flex-end"}}>
-            <button onClick={onClose} className="bh" style={{...btnBase,background:"transparent",border:"1.5px solid #C4B89A",color:"#8A8070"}}>閉じる</button>
-            </div>
-        </div>
-        </ModalShell>
-    );
-    }
-
-    /* ── Mobile nav sheet ── */
-    function NavSheet({view,setView,onClose}){
-    const TABS=[["list","≡ リスト"],["kanban","□ カンバン"],["calendar","◉ カレンダー"],["capacity","↑ キャパ"],["overview","◆ 概要"]];
-    return (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200}} onClick={onClose}>
-        <div style={{position:"absolute",bottom:0,left:0,right:0,background:"#F5F0E8",
-            border:"2px solid #111",borderBottom:"none",borderRadius:"4px 4px 0 0",
-            animation:"slideUp 0.18s ease"}} onClick={e=>e.stopPropagation()}>
-            <div style={{width:36,height:4,borderRadius:2,background:"#C4B89A",margin:"10px auto 14px"}}/>
-            {TABS.map(([v,l])=>(
-            <div key={v} onClick={()=>{setView(v);onClose();}} className="rh" style={{
-                padding:"14px 20px",fontSize:14,fontWeight:view===v?700:400,
-                color:view===v?"#111108":"#8A8070",borderTop:"1px solid #E8E2D6",
-                display:"flex",alignItems:"center",gap:10,
-                background:view===v?"#EDE7D9":"transparent",
+      </PhotoBanner>
+      <div style={{flex:1,display:"flex",overflowX:"auto",borderTop:"none"}}>
+        {STATUSES.map((lane,li)=>{
+          const m=SM[lane];
+          const lp=posts.filter(p=>p.status===lane);
+          return (
+            <div key={lane} style={{
+              minWidth:isMobile?160:200,flex:1,
+              borderRight:li<STATUSES.length-1?"2px solid #111":"none",
+              display:"flex",flexDirection:"column",overflow:"hidden",
             }}>
-                {l}
-                {view===v&&<span style={{marginLeft:"auto",fontFamily:"'DM Mono',monospace",fontSize:10,color:"#C4B89A"}}>✓</span>}
+              <div style={{padding:"8px 10px",borderBottom:"2px solid #111",background:m.bg,
+                display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+                <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,fontWeight:700,color:m.color}}>{lane}</span>
+                <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:m.color,border:`1.5px solid ${m.dot}`,padding:"1px 5px",borderRadius:1,fontWeight:700}}>{lp.length}</span>
+              </div>
+              <div style={{flex:1,overflowY:"auto",padding:7,display:"flex",flexDirection:"column",gap:6}}>
+                {lp.map(p=>{
+                  const du=daysUntil(p.date);
+                  const urg=urgency(du,p.status);
+                  return (
+                    <div key={p.id} className="kc" style={{
+                      background:"#F5F0E8",border:"1.5px solid #111",
+                      borderLeft:urg.left!=="none"?urg.left:"1.5px solid #111",
+                      borderRadius:1,padding:"9px 10px",transition:"all 0.12s",
+                    }}>
+                      <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,fontWeight:700,color:"#111108",marginBottom:5,lineHeight:1.4}}>{p.title}</div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                        <div>
+                          <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:urg.labelColor,fontWeight:700}}>{p.date.slice(5).replace("-","/")}</span>
+                          {urg.labelText&&(<span className={du===0?"today-pulse":""} style={{marginLeft:4,fontSize:8,fontFamily:"'DM Mono',monospace",fontWeight:700,background:urg.labelColor,color:"#fff",padding:"1px 4px",borderRadius:1}}>{urg.labelText}</span>)}
+                        </div>
+                        <div style={{display:"flex",gap:2}}>
+                          {p.creator&&<Av name={p.creator} members={members} size={17}/>}
+                          {p.tlManager&&p.tlManager!==p.creator&&<Av name={p.tlManager} members={members} size={17}/>}
+                        </div>
+                      </div>
+                      <select value={p.status} onChange={e=>update(p.id,"status",e.target.value)} style={{
+                        fontSize:9,padding:"3px 5px",border:`1px solid ${m.dot}`,
+                        background:m.bg,color:m.color,borderRadius:1,cursor:"pointer",
+                        fontFamily:"'Noto Sans JP',sans-serif",fontWeight:700,width:"100%",
+                      }}>
+                        {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  );
+                })}
+                {lp.length===0&&<div style={{color:"#C4B89A",fontSize:11,textAlign:"center",padding:"18px 0"}}>なし</div>}
+              </div>
             </div>
-            ))}
-            <div style={{height:"env(safe-area-inset-bottom,16px)"}}/>
-        </div>
-        </div>
-    );
-    }
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-    /* ── App ── */
-    function App(){
-    const w = useWindowWidth();
-    const isMobile  = w < 640;
-    const isTablet  = w < 900;
-
-    const [posts,setPosts]             = useState(SEED);
-    const [members,setMembers]         = useState(DEFAULT_MEMBERS);
-    const [view,setView]               = useState("list");
-    const [showAdd,setShowAdd]         = useState(false);
-    const [showMembers,setShowMembers] = useState(false);
-    const [showNav,setShowNav]         = useState(false);
-    const [searchQ,setSearchQ]         = useState("");
-    const [capData,setCapData]         = useState(DEFAULT_MEMBERS.reduce((a,m)=>({...a,[m]:"普通"}),{}));
-    const [filter,setFilter]           = useState({status:"all",member:"all"});
-
-    useEffect(()=>{
-        setCapData(prev=>{const next={...prev};members.forEach(m=>{if(!next[m])next[m]="普通";});return next;});
-    },[members]);
-
-    const update  = (id,f,v) => setPosts(p=>p.map(x=>x.id===id?{...x,[f]:v}:x));
-    const del     = id => setPosts(p=>p.filter(x=>x.id!==id));
-    const addPost = data => {setPosts(p=>[...p,data].sort((a,b)=>a.date.localeCompare(b.date)));setShowAdd(false);};
-
-    const filtered=useMemo(()=>posts.filter(p=>{
-        if(filter.status!=="all"&&p.status!==filter.status) return false;
-        if(filter.member!=="all"&&p.creator!==filter.member&&p.tlManager!==filter.member) return false;
-        return true;
-    }),[posts,filter]);
-
-    const alertCnt=posts.filter(p=>{const du=daysUntil(p.date);return du>=0&&du<=3&&!["完成","投稿済み"].includes(p.status);}).length;
-    const progress=Math.round(posts.filter(p=>["完成","投稿済み"].includes(p.status)).length/posts.length*100)||0;
-
-    const TABS=[["list","≡ リスト"],["kanban","□ カンバン"],["calendar","◉ カレンダー"],["capacity","↑ キャパ"],["overview","◆ 概要"]];
-    const viewLabel=TABS.find(([v])=>v===view)?.[1]||"";
-
-    return (
-        <div style={{background:"#F5F0E8",minHeight:"100dvh"}}>
-
-        {/* ── Header ── */}
-        <div style={{position:"sticky",top:0,zIndex:90,borderBottom:"2px solid #111"}}>
-            {/* Thin photo strip */}
-            <div style={{height:3,overflow:"hidden"}}>
-            <img src={PHOTOS.header} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:10,padding:`0 ${isMobile?12:18}px`,height:isMobile?48:50,background:"#F5F0E8"}}>
-            {/* Left: brand */}
-            <div style={{background:"#111108",color:"#F5F0E8",padding:"4px 8px",
-                fontSize:10,fontWeight:900,letterSpacing:"0.1em",fontFamily:"'DM Mono',monospace",borderRadius:1,flexShrink:0}}>MKT</div>
-            <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:isMobile?12:13,fontWeight:700,color:"#111108",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                新歓期 投稿管理
-                {!isMobile&&<span style={{fontSize:10,color:"#8A8070",fontWeight:400,marginLeft:7}}>AIESEC HI Mkt</span>}
-                </div>
-            </div>
-
-            {/* Alert badge */}
-            {alertCnt>0&&(
-                <div className="today-pulse" style={{background:"#B8000F",color:"#fff",fontSize:8,fontWeight:700,
-                padding:"2px 6px",borderRadius:1,fontFamily:"'DM Mono',monospace",
-                border:"1.5px solid #111",letterSpacing:"0.03em",flexShrink:0}}>
-                {alertCnt}件 締切近い
-                </div>
-            )}
-
-            {/* Progress pill */}
-            {!isMobile&&(
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                <div style={{width:60,height:4,background:"#E8E2D6",border:"1px solid #C4B89A",borderRadius:1,overflow:"hidden"}}>
-                    <div style={{height:"100%",width:`${progress}%`,background:"#2AAF5C",transition:"width 0.5s"}}/>
-                </div>
-                <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#8A8070",fontWeight:700}}>{progress}%</span>
-                </div>
-            )}
-
-            {/* Desktop tabs */}
-            {!isMobile&&(
-                <div style={{display:"flex",gap:0,border:"1.5px solid #111",borderRadius:1,overflow:"hidden"}}>
-                {TABS.map(([v,l])=>(
-                    <button key={v} onClick={()=>setView(v)} className="bh" style={{
-                    padding:isTablet?"5px 8px":"6px 10px",border:"none",
-                    background:view===v?"#111108":"transparent",
-                    color:view===v?"#F5F0E8":"#8A8070",
-                    fontSize:isTablet?8:9,fontWeight:700,cursor:"pointer",
-                    fontFamily:"'DM Mono',monospace",letterSpacing:"0.03em",
-                    borderRight:v!=="overview"?"1px solid #C4B89A":"none",
-                    }}>{l}</button>
+/* ── Calendar View ── */
+function CalView({posts,isMobile}){
+  const [ym,setYm]=useState(()=>{const d=new Date();return{y:d.getFullYear(),m:d.getMonth()};});
+  const first=new Date(ym.y,ym.m,1);
+  const last=new Date(ym.y,ym.m+1,0);
+  const cells=[];
+  for(let i=0;i<first.getDay();i++) cells.push(null);
+  for(let d=1;d<=last.getDate();d++) cells.push(d);
+  const byDay=useMemo(()=>{const r={};posts.forEach(p=>{if(!r[p.date])r[p.date]=[];r[p.date].push(p);});return r;},[posts]);
+  const td=todayStr();
+  return (
+    <div>
+      <PhotoBanner src={PHOTOS.calendar}>
+        <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#fff",fontWeight:700}}>CALENDAR</span>
+      </PhotoBanner>
+      <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",borderBottom:"2px solid #111"}}>
+        <button onClick={()=>setYm(p=>({y:p.m===0?p.y-1:p.y,m:p.m===0?11:p.m-1}))} className="bh" style={{...btnBase,padding:"4px 10px",background:"transparent",border:"1.5px solid #111"}}>←</button>
+        <span style={{fontFamily:"'DM Mono',monospace",fontSize:15,fontWeight:700,flex:1,textAlign:"center",letterSpacing:"0.05em"}}>{ym.y}.{String(ym.m+1).padStart(2,"0")}</span>
+        <button onClick={()=>setYm(p=>({y:p.m===11?p.y+1:p.y,m:p.m===11?0:p.m+1}))} className="bh" style={{...btnBase,padding:"4px 10px",background:"transparent",border:"1.5px solid #111"}}>→</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1.5px solid #111"}}>
+        {["日","月","火","水","木","金","土"].map((d,i)=>(
+          <div key={d} style={{textAlign:"center",padding:"6px 0",fontSize:isMobile?9:10,fontWeight:700,
+            fontFamily:"'DM Mono',monospace",color:i===0?"#B8000F":i===6?"#1a6bff":"#8A8070",
+            borderRight:i<6?"1px solid #E8E2D6":"none"}}>{d}</div>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+        {cells.map((d,i)=>{
+          const key=d?`${ym.y}-${String(ym.m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`:null;
+          const dp=key?byDay[key]||[]:[];
+          const isToday=key===td;
+          const du=key?daysUntil(key):99;
+          const dow=i%7;
+          const hasPending=dp.some(p=>!["完成","投稿済み"].includes(p.status));
+          const cellBg=isToday?"#FFF8EC":!d?"#EDE7D9":hasPending&&du===0?"#FFF0F0":hasPending&&du<=2?"#FFF4ED":hasPending&&du<=5?"#FFFBE8":"transparent";
+          return (
+            <div key={i} style={{minHeight:isMobile?56:76,borderBottom:"1px solid #E8E2D6",borderRight:dow<6?"1px solid #E8E2D6":"none",padding:"4px",background:cellBg}}>
+              {d&&<div style={{fontFamily:"'DM Mono',monospace",fontSize:isMobile?9:10,fontWeight:isToday?700:400,
+                color:isToday?"#D4620A":dow===0?"#B8000F":dow===6?"#1a6bff":"#8A8070",
+                width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:2,background:isToday?"#D4620A22":undefined,borderRadius:1}}>{d}</div>}
+              <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                {dp.map(p=>(
+                  <div key={p.id} style={{fontSize:isMobile?7:9,fontWeight:700,background:SM[p.status].bg,color:SM[p.status].color,border:`1px solid ${SM[p.status].dot}`,borderRadius:1,padding:"1px 3px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.title}</div>
                 ))}
-                </div>
-            )}
-
-            {/* Mobile: current view label + hamburger */}
-            {isMobile&&(
-                <button onClick={()=>setShowNav(true)} style={{
-                display:"flex",alignItems:"center",gap:6,
-                background:"transparent",border:"1.5px solid #C4B89A",borderRadius:1,
-                padding:"5px 9px",cursor:"pointer",flexShrink:0,
-                }}>
-                <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#8A8070",fontWeight:700}}>{viewLabel}</span>
-                <span style={{color:"#8A8070",fontSize:14,lineHeight:1}}>☰</span>
-                </button>
-            )}
-
-            <button onClick={()=>setShowMembers(true)} className="bh" style={{
-                ...btnBase,padding:"5px 9px",background:"transparent",
-                border:"1.5px solid #C4B89A",color:"#8A8070",fontSize:9,
-                fontFamily:"'DM Mono',monospace",flexShrink:0}}>
-                {isMobile?`${members.length}人`:`${members.length}人`}
-            </button>
-            <button onClick={()=>setShowAdd(true)} className="bh" style={{
-                ...btnBase,padding:"5px 10px",background:"#111108",
-                border:"1.5px solid #111",color:"#F5F0E8",fontSize:isMobile?11:12,flexShrink:0}}>
-                {isMobile?"＋":"+ 追加"}
-            </button>
+              </div>
             </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Capacity View ── */
+function CapView({capData,setCap,members,isMobile}){
+  return (
+    <div>
+      <div style={{position:"relative",height:100,overflow:"hidden",borderBottom:"2px solid #111"}}>
+        <img src={PHOTOS.capacity} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"brightness(0.6)"}}/>
+        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",padding:"0 18px",gap:16}}>
+          <div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#fff",fontWeight:700,letterSpacing:"0.1em",marginBottom:6}}>CAPACITY CHECK</div>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+              {CAPS.map(c=>{const cnt=members.filter(m=>capData[m]===c).length;return(<div key={c} style={{display:"flex",alignItems:"center",gap:3}}><span style={{width:6,height:6,borderRadius:"50%",background:CM[c],border:"1px solid rgba(255,255,255,0.5)"}}/><span style={{fontSize:9,color:"rgba(255,255,255,0.8)"}}>{c} {cnt}</span></div>);})}
+            </div>
+          </div>
+          <div style={{flex:1,maxWidth:260}}>
+            <div style={{display:"flex",height:6,borderRadius:1,overflow:"hidden",border:"1.5px solid rgba(255,255,255,0.35)"}}>
+              {CAPS.map(c=>{const cnt=members.filter(m=>capData[m]===c).length;return <div key={c} style={{flex:cnt||0.01,background:CM[c],transition:"flex 0.4s"}}/>;  })}
+            </div>
+          </div>
         </div>
-
-        {/* ── Filter bar ── */}
-        {["list","kanban"].includes(view)&&(
-            <div style={{display:"flex",alignItems:"center",gap:8,padding:`6px ${isMobile?10:16}px`,
-            borderBottom:"1px solid #E8E2D6",background:"#EDE7D9",flexWrap:"wrap"}}>
-            {!isMobile&&<span style={{fontSize:9,fontWeight:700,color:"#8A8070",fontFamily:"'DM Mono',monospace",letterSpacing:"0.1em"}}>FILTER</span>}
-            <input value={searchQ} onChange={e=>setSearchQ(e.target.value)}
-                placeholder="検索..." style={{...ss,width:isMobile?120:180,padding:"4px 8px",fontSize:11,flex:isMobile?"1":"none"}}/>
-            <select value={filter.status} onChange={e=>setFilter(p=>({...p,status:e.target.value}))}
-                style={{...ss,width:"auto",fontSize:isMobile?10:11,padding:"4px 6px",flex:isMobile?1:"none"}}>
-                <option value="all">全ステータス</option>
-                {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
-            <select value={filter.member} onChange={e=>setFilter(p=>({...p,member:e.target.value}))}
-                style={{...ss,width:"auto",fontSize:isMobile?10:11,padding:"4px 6px",flex:isMobile?1:"none"}}>
-                <option value="all">全メンバー</option>
-                {members.map(m=><option key={m} value={m}>{m}</option>)}
-            </select>
-            {(filter.status!=="all"||filter.member!=="all"||searchQ)&&(
-                <button onClick={()=>{setFilter({status:"all",member:"all"});setSearchQ("");}}
-                className="bh" style={{fontSize:9,color:"#D4620A",background:"transparent",border:"none",cursor:"pointer",fontWeight:700}}>× RESET</button>
-            )}
-            <span style={{marginLeft:"auto",fontSize:9,fontFamily:"'DM Mono',monospace",color:"#8A8070",flexShrink:0}}>
-                {filtered.length}/{posts.length}</span>
+      </div>
+      {members.map(m=>{
+        const cap=capData[m]||"普通";
+        return (
+          <div key={m} className="rh" style={{display:"flex",alignItems:"center",gap:isMobile?10:14,
+            padding:isMobile?"10px 12px":"12px 16px",borderBottom:"1px solid #E8E2D6",flexWrap:isMobile?"wrap":"nowrap"}}>
+            <Av name={m} members={members} size={isMobile?28:32}/>
+            <div style={{fontSize:isMobile?13:14,fontWeight:700,color:"#111108",minWidth:isMobile?60:72}}>{m}</div>
+            <div style={{flex:1,display:"flex",gap:5,flexWrap:"wrap"}}>
+              {CAPS.map(c=>{
+                const active=cap===c;const cc=CM[c];
+                return (
+                  <button key={c} onClick={()=>setCap(m,c)} className="bh" style={{
+                    padding:isMobile?"4px 8px":"5px 11px",border:`1.5px solid ${active?cc:"#C4B89A"}`,borderRadius:1,
+                    fontSize:isMobile?10:11,fontWeight:active?700:400,cursor:"pointer",
+                    background:active?cc+"22":"transparent",color:active?cc:"#8A8070",transition:"all 0.12s",
+                  }}>{c}</button>
+                );
+              })}
             </div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,fontWeight:700,color:CM[cap],minWidth:60,textAlign:"right"}}>● {cap}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Overview ── */
+function Overview({posts,capData,members,isMobile}){
+  const done=posts.filter(p=>["完成","投稿済み"].includes(p.status)).length;
+  const progress=Math.round(done/posts.length*100)||0;
+  const alertPosts=posts.filter(p=>{const du=daysUntil(p.date);return du>=0&&du<=5&&!["完成","投稿済み"].includes(p.status);}).sort((a,b)=>a.date.localeCompare(b.date));
+  const stats=[
+    {label:"総投稿数",   val:posts.length},
+    {label:"完成+投稿済",val:done},
+    {label:"未着手",     val:posts.filter(p=>p.status==="未着手").length},
+    {label:"担当未割当", val:posts.filter(p=>!p.creator).length},
+  ];
+  return (
+    <div>
+      <div style={{position:"relative",height:isMobile?90:120,overflow:"hidden",borderBottom:"2px solid #111"}}>
+        <img src={PHOTOS.overview} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"brightness(0.5)"}}/>
+        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",padding:"0 20px",justifyContent:"space-between"}}>
+          <div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"rgba(255,255,255,0.55)",letterSpacing:"0.1em",marginBottom:5}}>OVERVIEW</div>
+            <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:isMobile?17:22,fontWeight:900,color:"#fff"}}>新歓期 投稿管理</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:isMobile?28:36,fontWeight:700,color:"#fff",lineHeight:1}}>{progress}<span style={{fontSize:14}}>%</span></div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"rgba(255,255,255,0.55)",marginTop:2}}>COMPLETED</div>
+          </div>
+        </div>
+      </div>
+      <div style={{padding:isMobile?"14px":"20px",display:"flex",flexDirection:"column",gap:16}}>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
+          {stats.map(s=>(
+            <div key={s.label} style={{background:"#F5F0E8",border:"1.5px solid #111",borderRadius:1,padding:"12px 14px",boxShadow:"2px 2px 0 #111"}}>
+              <div style={{fontFamily:"'DM Mono',monospace",fontSize:24,fontWeight:700,color:"#111108",lineHeight:1}}>{s.val}</div>
+              <div style={{fontSize:9,color:"#8A8070",marginTop:5}}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{border:"1.5px solid #111",borderRadius:1,padding:"13px 15px",boxShadow:"2px 2px 0 #111"}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
+            <span style={{fontSize:11,fontWeight:700}}>全体進捗</span>
+            <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:700,color:"#1A7A3C"}}>{progress}%</span>
+          </div>
+          <div style={{height:8,background:"#E8E2D6",border:"1px solid #C4B89A",borderRadius:1,overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${progress}%`,background:"#2AAF5C",transition:"width 0.5s"}}/>
+          </div>
+        </div>
+        {alertPosts.length>0&&(
+          <div style={{border:"1.5px solid #D4620A",borderRadius:1,overflow:"hidden",boxShadow:"2px 2px 0 #111"}}>
+            <div style={{padding:"8px 13px",background:"#FFF0E0",borderBottom:"2px solid #D4620A",fontFamily:"'DM Mono',monospace",fontSize:9,color:"#D4620A",fontWeight:700,letterSpacing:"0.08em"}}>DEADLINE ALERT — {alertPosts.length}件</div>
+            {alertPosts.map(p=>{const du=daysUntil(p.date);const urg=urgency(du,p.status);return(<div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 13px",borderBottom:"1px solid #F5D5B0",background:urg.rowBg,borderLeft:urg.left}}><div className={du===0?"today-pulse":""} style={{fontSize:9,fontFamily:"'DM Mono',monospace",fontWeight:700,color:"#fff",background:urg.labelColor,padding:"2px 6px",borderRadius:1,flexShrink:0}}>{urg.labelText||p.date.slice(5).replace("-","/")}</div><span style={{flex:1,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.title}</span><span style={{fontSize:10,color:"#8A8070"}}>{p.creator||"—"}</span></div>);})}
+          </div>
         )}
-
-        {/* ── Content ── */}
-        <div style={{animation:"fadeIn 0.15s ease"}}>
-            {view==="list"     && <ListView     posts={filtered} update={update} del={del} searchQ={searchQ} members={members} isMobile={isMobile}/>}
-            {view==="kanban"   && <KanbanView   posts={filtered} update={update} members={members} isMobile={isMobile}/>}
-            {view==="calendar" && <CalView      posts={posts} isMobile={isMobile}/>}
-            {view==="capacity" && <CapView      capData={capData} setCap={setCapData} members={members} isMobile={isMobile}/>}
-            {view==="overview" && <Overview     posts={posts} capData={capData} members={members} isMobile={isMobile}/>}
+        <div style={{border:"1.5px solid #111",borderRadius:1,overflow:"hidden",boxShadow:"2px 2px 0 #111"}}>
+          <div style={{padding:"8px 13px",borderBottom:"2px solid #111",fontFamily:"'DM Mono',monospace",fontSize:9,color:"#8A8070",letterSpacing:"0.1em"}}>STATUS BREAKDOWN</div>
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(4,1fr)":"repeat(7,1fr)"}}>
+            {STATUSES.map((s,i)=>{const cnt=posts.filter(p=>p.status===s).length;return(<div key={s} style={{flex:1,padding:"11px 6px",textAlign:"center",borderRight:i<STATUSES.length-1?"1px solid #E8E2D6":"none"}}><div style={{fontFamily:"'DM Mono',monospace",fontSize:isMobile?16:20,fontWeight:700,color:SM[s].color}}>{cnt}</div><div style={{fontSize:7,color:"#8A8070",marginTop:3,lineHeight:1.3}}>{s}</div></div>);})}
+          </div>
         </div>
-
-        {showAdd     && <AddModal onAdd={addPost} onClose={()=>setShowAdd(false)} members={members}/>}
-        {showMembers && <MemberManager members={members} setMembers={setMembers} onClose={()=>setShowMembers(false)}/>}
-        {showNav     && <NavSheet view={view} setView={setView} onClose={()=>setShowNav(false)}/>}
+        <div style={{border:"1.5px solid #111",borderRadius:1,overflow:"hidden",boxShadow:"2px 2px 0 #111"}}>
+          <div style={{padding:"8px 13px",borderBottom:"2px solid #111",fontFamily:"'DM Mono',monospace",fontSize:9,color:"#8A8070",letterSpacing:"0.1em"}}>MEMBER ASSIGNMENTS</div>
+          {members.map(m=>{const cr=posts.filter(p=>p.creator===m);const tl=posts.filter(p=>p.tlManager===m);if(!cr.length&&!tl.length)return null;return(<div key={m} className="rh" style={{display:"flex",alignItems:"center",gap:10,padding:"9px 13px",borderBottom:"1px solid #E8E2D6",flexWrap:"wrap"}}><Av name={m} members={members} size={26}/><span style={{fontSize:12,fontWeight:700,color:"#111108",minWidth:60}}>{m}</span><div style={{flex:1,display:"flex",gap:4,flexWrap:"wrap"}}>{cr.map(p=><span key={p.id} style={{fontSize:9,padding:"2px 5px",borderRadius:1,background:"#E8F0FF",color:"#1a6bff",border:"1px solid #1a6bff",fontWeight:700}}>作 {p.title}</span>)}{tl.map(p=><span key={p.id} style={{fontSize:9,padding:"2px 5px",borderRadius:1,background:"#E4F5EB",color:"#1A7A3C",border:"1px solid #2AAF5C",fontWeight:700}}>TL {p.title}</span>)}</div><span style={{fontSize:9,fontWeight:700,color:CM[capData[m]||"普通"],fontFamily:"'DM Mono',monospace"}}>{capData[m]||"普通"}</span></div>);})}
         </div>
-    );
+      </div>
+    </div>
+  );
+}
+
+/* ── Modals ── */
+function ModalShell({onClose,width=460,children}){
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:"16px",animation:"fadeIn 0.12s ease"}} onClick={onClose}>
+      <div style={{background:"#F5F0E8",border:"2px solid #111",borderRadius:1,width:"100%",maxWidth:width,boxShadow:"6px 6px 0 #111",overflow:"hidden",animation:"slideUp 0.15s ease",maxHeight:"90dvh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function AddModal({onAdd,onClose,members}){
+  const [f,setF]=useState({title:"",date:"",creator:"",tlManager:"",note:"",link:""});
+  const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  const ok=f.title&&f.date;
+  return (
+    <ModalShell onClose={onClose} width={460}>
+      <div style={{height:52,overflow:"hidden",position:"relative"}}>
+        <img src={PHOTOS.modal} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"brightness(0.5)"}}/>
+        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",padding:"0 20px"}}>
+          <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#fff",fontWeight:700,letterSpacing:"0.1em"}}>+ 投稿を追加</span>
+        </div>
+      </div>
+      <div style={{padding:"20px",display:"flex",flexDirection:"column",gap:12}}>
+        <div><div style={ml}>投稿タイトル *</div><input value={f.title} onChange={set("title")} placeholder="例: 新歓キックオフ告知" style={ss}/></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div><div style={ml}>投稿予定日 *</div><input type="date" value={f.date} onChange={set("date")} style={ss}/></div>
+          <MemberSel label="作成担当"   value={f.creator}   onChange={v=>setF(p=>({...p,creator:v}))}   members={members}/>
+          <MemberSel label="TL管理担当" value={f.tlManager} onChange={v=>setF(p=>({...p,tlManager:v}))} members={members}/>
+          <div><div style={ml}>メモ</div><input value={f.note} onChange={set("note")} placeholder="備考など..." style={ss}/></div>
+        </div>
+        <div><div style={ml}>投稿リンク / ファイルURL</div><input value={f.link} onChange={set("link")} placeholder="https://..." style={ss}/></div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",paddingTop:4}}>
+          <button onClick={onClose} className="bh" style={{...btnBase,background:"transparent",border:"1.5px solid #C4B89A",color:"#8A8070"}}>キャンセル</button>
+          <button onClick={()=>ok&&onAdd({...f,id:uid(),status:"未着手"})} className="bh" style={{...btnBase,background:ok?"#111108":"#C4B89A",border:`1.5px solid ${ok?"#111":"#C4B89A"}`,color:"#F5F0E8",cursor:ok?"pointer":"not-allowed",opacity:ok?1:0.6}}>追加する</button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function MemberManager({members,onAdd,onRemove,onClose}){
+  const [newName,setNewName]=useState("");
+  const add=()=>{const n=newName.trim();if(!n||members.includes(n))return;onAdd(n);setNewName("");};
+  return (
+    <ModalShell onClose={onClose} width={400}>
+      <div style={{height:48,overflow:"hidden",position:"relative"}}>
+        <img src={PHOTOS.modal} alt="" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:"center 20%",filter:"brightness(0.45)"}}/>
+        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",padding:"0 18px"}}>
+          <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#fff",fontWeight:700,letterSpacing:"0.1em"}}>MEMBERS — {members.length}人</span>
+        </div>
+      </div>
+      <div style={{padding:"16px 20px",display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:260,overflowY:"auto"}}>
+          {members.map((m,i)=>(
+            <div key={m} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:"#EDE7D9",border:"1px solid #C4B89A",borderRadius:1}}>
+              <Av name={m} members={members} size={24}/>
+              <span style={{flex:1,fontSize:13,fontWeight:600,color:"#111108"}}>{m}</span>
+              <button onClick={()=>onRemove(i)} className="bh" style={{fontSize:9,padding:"2px 7px",border:"1px solid #D4620A",background:"transparent",color:"#D4620A",cursor:"pointer",borderRadius:1,fontWeight:700}}>削除</button>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="新しいメンバー名..." style={{...ss,flex:1}}/>
+          <button onClick={add} className="bh" style={{...btnBase,background:"#111108",border:"1.5px solid #111",color:"#F5F0E8",padding:"7px 14px",flexShrink:0}}>追加</button>
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end"}}>
+          <button onClick={onClose} className="bh" style={{...btnBase,background:"transparent",border:"1.5px solid #C4B89A",color:"#8A8070"}}>閉じる</button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function NavSheet({view,setView,onClose}){
+  const TABS=[["list","≡ リスト"],["kanban","□ カンバン"],["calendar","◉ カレンダー"],["capacity","↑ キャパ"],["overview","◆ 概要"]];
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200}} onClick={onClose}>
+      <div style={{position:"absolute",bottom:0,left:0,right:0,background:"#F5F0E8",border:"2px solid #111",borderBottom:"none",borderRadius:"4px 4px 0 0",animation:"slideUp 0.18s ease"}} onClick={e=>e.stopPropagation()}>
+        <div style={{width:36,height:4,borderRadius:2,background:"#C4B89A",margin:"10px auto 14px"}}/>
+        {TABS.map(([v,l])=>(
+          <div key={v} onClick={()=>{setView(v);onClose();}} className="rh" style={{padding:"14px 20px",fontSize:14,fontWeight:view===v?700:400,color:view===v?"#111108":"#8A8070",borderTop:"1px solid #E8E2D6",display:"flex",alignItems:"center",gap:10,background:view===v?"#EDE7D9":"transparent"}}>
+            {l}{view===v&&<span style={{marginLeft:"auto",fontFamily:"'DM Mono',monospace",fontSize:10,color:"#C4B89A"}}>✓</span>}
+          </div>
+        ))}
+        <div style={{height:"env(safe-area-inset-bottom,16px)"}}/>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════
+   ★ App — Firebase 統合版
+════════════════════════════════════════════════════ */
+function App(){
+  const w          = useWindowWidth();
+  const isMobile   = w < 640;
+  const isTablet   = w < 900;
+
+  /* ── Auth state ── */
+  const [user,    setUser]    = useState(undefined); // undefined=loading, null=not logged in
+  const [authErr, setAuthErr] = useState(null);
+
+  /* ── Data state (Firestore-backed) ── */
+  const [posts,    setPosts]    = useState([]);
+  const [members,  setMembers]  = useState(DEFAULT_MEMBERS);
+  const [capData,  setCapData]  = useState({});
+  const [dataReady,setDataReady]= useState(false);
+
+  /* ── UI state ── */
+  const [view,        setView]        = useState("list");
+  const [showAdd,     setShowAdd]     = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
+  const [showNav,     setShowNav]     = useState(false);
+  const [searchQ,     setSearchQ]     = useState("");
+  const [filter,      setFilter]      = useState({status:"all",member:"all"});
+
+  /* ── 1. Auth listener ── */
+  useEffect(()=>{
+    const unsub = auth.onAuthStateChanged(async u => {
+      if(u){
+        if(u.email && u.email.endsWith("@aiesec.jp")){
+          setUser(u);
+          setAuthErr(null);
+        } else {
+          await auth.signOut();
+          setUser(null);
+          setAuthErr("@aiesec.jp アカウントのみログインできます");
+        }
+      } else {
+        setUser(null);
+      }
+    });
+    return unsub;
+  },[]);
+
+  /* ── 2. Firestore listeners (only when logged in) ── */
+  useEffect(()=>{
+    if(!user) return;
+
+    /* posts コレクション */
+    const unsubPosts = db.collection("posts")
+      .orderBy("date","asc")
+      .onSnapshot(snap => {
+        if(snap.empty){
+          /* 初回: シードデータを書き込む */
+          const batch = db.batch();
+          SEED.forEach(p => {
+            batch.set(db.collection("posts").doc(p.id), p);
+          });
+          batch.commit();
+          return; // 書き込み後に再度 onSnapshot が呼ばれる
+        }
+        const data = snap.docs.map(d => d.data());
+        setPosts(data);
+        setDataReady(true);
+      });
+
+    /* appConfig ドキュメント (members + capData) */
+    const unsubConfig = db.collection("appConfig").doc("main")
+      .onSnapshot(snap => {
+        if(snap.exists){
+          const d = snap.data();
+          if(d.members)  setMembers(d.members);
+          if(d.capData)  setCapData(d.capData);
+        } else {
+          const initCap = DEFAULT_MEMBERS.reduce((a,m)=>({...a,[m]:"普通"}),{});
+          db.collection("appConfig").doc("main").set({
+            members: DEFAULT_MEMBERS,
+            capData: initCap,
+          });
+        }
+      });
+
+    return () => { unsubPosts(); unsubConfig(); };
+  },[user]);
+
+  /* ── Google ログイン ── */
+  const handleLogin = async () => {
+    setAuthErr(null);
+    try {
+      await auth.signInWithPopup(googleProvider);
+    } catch(e) {
+      if(e.code !== "auth/popup-closed-by-user"){
+        setAuthErr("ログインに失敗しました: " + e.message);
+      }
     }
+  };
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
-    </script>
-    </body>
-    </html>
+  /* ── Firestore 書き込み ── */
+  const update = useCallback((id, field, val) => {
+    db.collection("posts").doc(String(id)).update({[field]: val});
+  },[]);
+
+  const del = useCallback(id => {
+    db.collection("posts").doc(String(id)).delete();
+  },[]);
+
+  const addPost = useCallback(data => {
+    const docId = uid();
+    db.collection("posts").doc(docId).set({...data, id: docId});
+    setShowAdd(false);
+  },[]);
+
+  /* members 操作 → Firestore に書く */
+  const handleAddMember = useCallback(name => {
+    const next = [...members, name];
+    const nextCap = {...capData, [name]: "普通"};
+    db.collection("appConfig").doc("main").update({members: next, capData: nextCap});
+  },[members, capData]);
+
+  const handleRemoveMember = useCallback(idx => {
+    const removed = members[idx];
+    const next    = members.filter((_,i)=>i!==idx);
+    const nextCap = {...capData};
+    delete nextCap[removed];
+    db.collection("appConfig").doc("main").update({members: next, capData: nextCap});
+  },[members, capData]);
+
+  /* capData 操作 → Firestore に書く */
+  const handleSetCap = useCallback((member, cap) => {
+    db.collection("appConfig").doc("main").update({[`capData.${member}`]: cap});
+  },[]);
+
+  /* ── Render guards ── */
+  if(user === undefined) return <LoadingScreen message="AUTHENTICATING..."/>;
+  if(!user)              return <LoginScreen onLogin={handleLogin} error={authErr}/>;
+  if(!dataReady)         return <LoadingScreen message="LOADING DATA..."/>;
+
+  /* ── Filtered posts ── */
+  const filtered = posts.filter(p=>{
+    if(filter.status!=="all" && p.status!==filter.status) return false;
+    if(filter.member!=="all" && p.creator!==filter.member && p.tlManager!==filter.member) return false;
+    return true;
+  });
+
+  const alertCnt = posts.filter(p=>{const du=daysUntil(p.date);return du>=0&&du<=3&&!["完成","投稿済み"].includes(p.status);}).length;
+  const progress  = Math.round(posts.filter(p=>["完成","投稿済み"].includes(p.status)).length / posts.length * 100) || 0;
+  const TABS = [["list","≡ リスト"],["kanban","□ カンバン"],["calendar","◉ カレンダー"],["capacity","↑ キャパ"],["overview","◆ 概要"]];
+  const viewLabel = TABS.find(([v])=>v===view)?.[1]||"";
+
+  return (
+    <div style={{background:"#F5F0E8",minHeight:"100dvh"}}>
+
+      {/* ── Header ── */}
+      <div style={{position:"sticky",top:0,zIndex:90,borderBottom:"2px solid #111"}}>
+        <div style={{height:3,overflow:"hidden"}}>
+          <img src={PHOTOS.header} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:`0 ${isMobile?12:18}px`,height:isMobile?48:50,background:"#F5F0E8"}}>
+          <div style={{background:"#111108",color:"#F5F0E8",padding:"4px 8px",fontSize:10,fontWeight:900,letterSpacing:"0.1em",fontFamily:"'DM Mono',monospace",borderRadius:1,flexShrink:0}}>MKT</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:isMobile?12:13,fontWeight:700,color:"#111108",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              新歓期 投稿管理
+              {!isMobile&&<span style={{fontSize:10,color:"#8A8070",fontWeight:400,marginLeft:7}}>AIESEC HI Mkt</span>}
+            </div>
+          </div>
+
+          {/* ── ユーザー表示 ── */}
+          {!isMobile&&user&&(
+            <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:"#EDE7D9",border:"1px solid #C4B89A",borderRadius:1}}>
+              {user.photoURL&&<img src={user.photoURL} style={{width:16,height:16,borderRadius:"50%",border:"1px solid #C4B89A"}} alt=""/>}
+              <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#8A8070",maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.displayName||user.email}</span>
+              <button onClick={()=>auth.signOut()} className="bh" style={{fontSize:8,padding:"1px 5px",border:"1px solid #C4B89A",background:"transparent",color:"#8A8070",cursor:"pointer",borderRadius:1,fontFamily:"'DM Mono',monospace",fontWeight:700}}>OUT</button>
+            </div>
+          )}
+
+          {alertCnt>0&&(
+            <div className="today-pulse" style={{background:"#B8000F",color:"#fff",fontSize:8,fontWeight:700,padding:"2px 6px",borderRadius:1,fontFamily:"'DM Mono',monospace",border:"1.5px solid #111",letterSpacing:"0.03em",flexShrink:0}}>
+              {alertCnt}件 締切近い
+            </div>
+          )}
+
+          {!isMobile&&(
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{width:60,height:4,background:"#E8E2D6",border:"1px solid #C4B89A",borderRadius:1,overflow:"hidden"}}>
+                <div style={{height:"100%",width:`${progress}%`,background:"#2AAF5C",transition:"width 0.5s"}}/>
+              </div>
+              <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#8A8070",fontWeight:700}}>{progress}%</span>
+            </div>
+          )}
+
+          {!isMobile&&(
+            <div style={{display:"flex",gap:0,border:"1.5px solid #111",borderRadius:1,overflow:"hidden"}}>
+              {TABS.map(([v,l])=>(
+                <button key={v} onClick={()=>setView(v)} className="bh" style={{
+                  padding:isTablet?"5px 8px":"6px 10px",border:"none",
+                  background:view===v?"#111108":"transparent",
+                  color:view===v?"#F5F0E8":"#8A8070",
+                  fontSize:isTablet?8:9,fontWeight:700,cursor:"pointer",
+                  fontFamily:"'DM Mono',monospace",letterSpacing:"0.03em",
+                  borderRight:v!=="overview"?"1px solid #C4B89A":"none",
+                }}>{l}</button>
+              ))}
+            </div>
+          )}
+
+          {isMobile&&(
+            <button onClick={()=>setShowNav(true)} style={{display:"flex",alignItems:"center",gap:6,background:"transparent",border:"1.5px solid #C4B89A",borderRadius:1,padding:"5px 9px",cursor:"pointer",flexShrink:0}}>
+              <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#8A8070",fontWeight:700}}>{viewLabel}</span>
+              <span style={{color:"#8A8070",fontSize:14,lineHeight:1}}>☰</span>
+            </button>
+          )}
+
+          <button onClick={()=>setShowMembers(true)} className="bh" style={{...btnBase,padding:"5px 9px",background:"transparent",border:"1.5px solid #C4B89A",color:"#8A8070",fontSize:9,fontFamily:"'DM Mono',monospace",flexShrink:0}}>
+            {members.length}人
+          </button>
+          <button onClick={()=>setShowAdd(true)} className="bh" style={{...btnBase,padding:"5px 10px",background:"#111108",border:"1.5px solid #111",color:"#F5F0E8",fontSize:isMobile?11:12,flexShrink:0}}>
+            {isMobile?"＋":"+ 追加"}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Filter bar ── */}
+      {["list","kanban"].includes(view)&&(
+        <div style={{display:"flex",alignItems:"center",gap:8,padding:`6px ${isMobile?10:16}px`,borderBottom:"1px solid #E8E2D6",background:"#EDE7D9",flexWrap:"wrap"}}>
+          {!isMobile&&<span style={{fontSize:9,fontWeight:700,color:"#8A8070",fontFamily:"'DM Mono',monospace",letterSpacing:"0.1em"}}>FILTER</span>}
+          <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="検索..." style={{...ss,width:isMobile?120:180,padding:"4px 8px",fontSize:11,flex:isMobile?"1":"none"}}/>
+          <select value={filter.status} onChange={e=>setFilter(p=>({...p,status:e.target.value}))} style={{...ss,width:"auto",fontSize:isMobile?10:11,padding:"4px 6px",flex:isMobile?1:"none"}}>
+            <option value="all">全ステータス</option>
+            {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={filter.member} onChange={e=>setFilter(p=>({...p,member:e.target.value}))} style={{...ss,width:"auto",fontSize:isMobile?10:11,padding:"4px 6px",flex:isMobile?1:"none"}}>
+            <option value="all">全メンバー</option>
+            {members.map(m=><option key={m} value={m}>{m}</option>)}
+          </select>
+          {(filter.status!=="all"||filter.member!=="all"||searchQ)&&(
+            <button onClick={()=>{setFilter({status:"all",member:"all"});setSearchQ("");}} className="bh" style={{fontSize:9,color:"#D4620A",background:"transparent",border:"none",cursor:"pointer",fontWeight:700}}>× RESET</button>
+          )}
+          <span style={{marginLeft:"auto",fontSize:9,fontFamily:"'DM Mono',monospace",color:"#8A8070",flexShrink:0}}>
+            {filtered.length}/{posts.length}
+          </span>
+
+          {/* ── リアルタイム同期バッジ ── */}
+          <span style={{display:"flex",alignItems:"center",gap:4,fontSize:8,fontFamily:"'DM Mono',monospace",color:"#1A7A3C",flexShrink:0}}>
+            <span style={{width:5,height:5,borderRadius:"50%",background:"#2AAF5C",display:"inline-block",animation:"pulse 2s ease-in-out infinite"}}/>
+            LIVE
+          </span>
+        </div>
+      )}
+
+      {/* ── Content ── */}
+      <div style={{animation:"fadeIn 0.15s ease"}}>
+        {view==="list"     && <ListView     posts={filtered} update={update} del={del} searchQ={searchQ} members={members} isMobile={isMobile}/>}
+        {view==="kanban"   && <KanbanView   posts={filtered} update={update} members={members} isMobile={isMobile}/>}
+        {view==="calendar" && <CalView      posts={posts} isMobile={isMobile}/>}
+        {view==="capacity" && <CapView      capData={capData} setCap={handleSetCap} members={members} isMobile={isMobile}/>}
+        {view==="overview" && <Overview     posts={posts} capData={capData} members={members} isMobile={isMobile}/>}
+      </div>
+
+      {showAdd     && <AddModal onAdd={addPost} onClose={()=>setShowAdd(false)} members={members}/>}
+      {showMembers && <MemberManager members={members} onAdd={handleAddMember} onRemove={handleRemoveMember} onClose={()=>setShowMembers(false)}/>}
+      {showNav     && <NavSheet view={view} setView={setView} onClose={()=>setShowNav(false)}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
