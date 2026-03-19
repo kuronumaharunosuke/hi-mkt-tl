@@ -35,7 +35,24 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db   = firebase.firestore();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
-googleProvider.setCustomParameters({ hd: "aiesec.jp" }); // ドメインヒント
+googleProvider.setCustomParameters({ hd: "aiesec.jp" }); // ドメインヒント（UIのみ）
+
+/*
+  ⚠️  IMPORTANT: Firestore Security Rules を必ず設定すること！
+  Firebase Console > Firestore > ルール に以下を貼り付ける:
+
+  rules_version = '2';
+  service cloud.firestore {
+    match /databases/{database}/documents {
+      match /{document=**} {
+        allow read, write: if request.auth != null
+          && request.auth.token.email.matches('.*@aiesec\\.jp');
+      }
+    }
+  }
+
+  これがないと @aiesec.jp 以外のアカウントからも読み書き可能になる。
+*/
 </script>
 
 <style>
@@ -129,6 +146,29 @@ const ml = {fontSize:9,fontWeight:700,color:"#8A8070",letterSpacing:"0.1em",font
 const ss = {background:"#F5F0E8",border:"1.5px solid #C4B89A",borderRadius:1,padding:"7px 9px",fontSize:12,fontFamily:"'Noto Sans JP',sans-serif",fontWeight:500,color:"#111108",width:"100%"};
 const btnBase = {padding:"7px 14px",borderRadius:1,fontSize:12,cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontWeight:700,transition:"all 0.12s",border:"none"};
 
+/* ── Error Toast ── */
+function ErrorToast({msg, onDismiss}){
+  useEffect(()=>{
+    if(!msg) return;
+    const t = setTimeout(onDismiss, 5000);
+    return ()=>clearTimeout(t);
+  },[msg, onDismiss]);
+  if(!msg) return null;
+  return (
+    <div style={{
+      position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",
+      zIndex:9999,background:"#B8000F",color:"#fff",padding:"10px 18px",
+      border:"2px solid #111",borderRadius:1,boxShadow:"3px 3px 0 #111",
+      fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:10,
+      animation:"slideUp 0.15s ease",maxWidth:"calc(100vw - 32px)",
+      fontFamily:"'Noto Sans JP',sans-serif",
+    }}>
+      <span>⚠ {msg}</span>
+      <button onClick={onDismiss} style={{background:"transparent",border:"none",color:"#fff",cursor:"pointer",fontSize:14,lineHeight:1,padding:0}}>×</button>
+    </div>
+  );
+}
+
 /* ── Loading Screen ── */
 function LoadingScreen({message}){
   return (
@@ -149,7 +189,6 @@ function LoginScreen({onLogin, error}){
   return (
     <div style={{minHeight:"100dvh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"#F5F0E8",padding:24,gap:0}}>
       <div style={{width:"100%",maxWidth:380,border:"2px solid #111",borderRadius:1,boxShadow:"6px 6px 0 #111",overflow:"hidden"}}>
-        {/* Header photo */}
         <div style={{height:80,overflow:"hidden",position:"relative"}}>
           <img src={PHOTOS.overview} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"brightness(0.45)"}}/>
           <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
@@ -180,7 +219,6 @@ function LoginScreen({onLogin, error}){
             padding:"11px 20px",cursor:"pointer",width:"100%",justifyContent:"center",
             boxShadow:"3px 3px 0 #111",transition:"all 0.12s",
           }}>
-            {/* Google icon */}
             <svg width="16" height="16" viewBox="0 0 18 18">
               <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
               <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
@@ -738,6 +776,7 @@ function ModalShell({onClose,width=460,children}){
   );
 }
 
+/* [FIX #2] AddModal — id生成を削除。addPost 側で一元管理する */
 function AddModal({onAdd,onClose,members}){
   const [f,setF]=useState({title:"",date:"",creator:"",tlManager:"",note:"",link:""});
   const set=k=>e=>setF(p=>({...p,[k]:e.target.value}));
@@ -761,7 +800,8 @@ function AddModal({onAdd,onClose,members}){
         <div><div style={ml}>投稿リンク / ファイルURL</div><input value={f.link} onChange={set("link")} placeholder="https://..." style={ss}/></div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end",paddingTop:4}}>
           <button onClick={onClose} className="bh" style={{...btnBase,background:"transparent",border:"1.5px solid #C4B89A",color:"#8A8070"}}>キャンセル</button>
-          <button onClick={()=>ok&&onAdd({...f,id:uid(),status:"未着手"})} className="bh" style={{...btnBase,background:ok?"#111108":"#C4B89A",border:`1.5px solid ${ok?"#111":"#C4B89A"}`,color:"#F5F0E8",cursor:ok?"pointer":"not-allowed",opacity:ok?1:0.6}}>追加する</button>
+          {/* id は渡さない — addPost 側で生成 */}
+          <button onClick={()=>ok&&onAdd({...f,status:"未着手"})} className="bh" style={{...btnBase,background:ok?"#111108":"#C4B89A",border:`1.5px solid ${ok?"#111":"#C4B89A"}`,color:"#F5F0E8",cursor:ok?"pointer":"not-allowed",opacity:ok?1:0.6}}>追加する</button>
         </div>
       </div>
     </ModalShell>
@@ -819,7 +859,7 @@ function NavSheet({view,setView,onClose}){
 }
 
 /* ════════════════════════════════════════════════════
-   ★ App — Firebase 統合版
+   ★ App — Firebase 統合版（修正済み）
 ════════════════════════════════════════════════════ */
 function App(){
   const w          = useWindowWidth();
@@ -827,10 +867,10 @@ function App(){
   const isTablet   = w < 900;
 
   /* ── Auth state ── */
-  const [user,    setUser]    = useState(undefined); // undefined=loading, null=not logged in
+  const [user,    setUser]    = useState(undefined);
   const [authErr, setAuthErr] = useState(null);
 
-  /* ── Data state (Firestore-backed) ── */
+  /* ── Data state ── */
   const [posts,    setPosts]    = useState([]);
   const [members,  setMembers]  = useState(DEFAULT_MEMBERS);
   const [capData,  setCapData]  = useState({});
@@ -843,6 +883,10 @@ function App(){
   const [showNav,     setShowNav]     = useState(false);
   const [searchQ,     setSearchQ]     = useState("");
   const [filter,      setFilter]      = useState({status:"all",member:"all"});
+
+  /* [FIX #3] エラートースト用 */
+  const [toastMsg,    setToastMsg]    = useState(null);
+  const showError = useCallback(msg => setToastMsg(msg), []);
 
   /* ── 1. Auth listener ── */
   useEffect(()=>{
@@ -863,29 +907,32 @@ function App(){
     return unsub;
   },[]);
 
-  /* ── 2. Firestore listeners (only when logged in) ── */
+  /* ── 2. Firestore listeners ── */
   useEffect(()=>{
     if(!user) return;
 
-    /* posts コレクション */
     const unsubPosts = db.collection("posts")
       .orderBy("date","asc")
       .onSnapshot(snap => {
         if(snap.empty){
-          /* 初回: シードデータを書き込む */
+          /* 初回シード */
           const batch = db.batch();
           SEED.forEach(p => {
             batch.set(db.collection("posts").doc(p.id), p);
           });
-          batch.commit();
-          return; // 書き込み後に再度 onSnapshot が呼ばれる
+          /* [FIX #4] batch.commit() にエラーハンドリングを追加 */
+          batch.commit().catch(err => {
+            showError("初期データの書き込みに失敗しました: " + err.message);
+          });
+          return;
         }
         const data = snap.docs.map(d => d.data());
         setPosts(data);
         setDataReady(true);
+      }, err => {
+        showError("データの取得に失敗しました: " + err.message);
       });
 
-    /* appConfig ドキュメント (members + capData) */
     const unsubConfig = db.collection("appConfig").doc("main")
       .onSnapshot(snap => {
         if(snap.exists){
@@ -897,12 +944,20 @@ function App(){
           db.collection("appConfig").doc("main").set({
             members: DEFAULT_MEMBERS,
             capData: initCap,
-          });
+          }).catch(err => showError("設定の初期化に失敗しました: " + err.message));
         }
+      }, err => {
+        showError("設定の取得に失敗しました: " + err.message);
       });
 
-    return () => { unsubPosts(); unsubConfig(); };
-  },[user]);
+    /* [FIX #3] クリーンアップ時にデータをリセット（再ログイン時の混在防止） */
+    return () => {
+      unsubPosts();
+      unsubConfig();
+      setPosts([]);
+      setDataReady(false);
+    };
+  },[user, showError]);
 
   /* ── Google ログイン ── */
   const handleLogin = async () => {
@@ -916,40 +971,56 @@ function App(){
     }
   };
 
-  /* ── Firestore 書き込み ── */
+  /* ── Firestore 書き込み（エラーハンドリング付き） ── */
+
+  /* [FIX #3] update にエラーハンドリングを追加 */
   const update = useCallback((id, field, val) => {
-    db.collection("posts").doc(String(id)).update({[field]: val});
-  },[]);
+    db.collection("posts").doc(String(id))
+      .update({[field]: val})
+      .catch(err => showError("更新に失敗しました: " + err.message));
+  },[showError]);
 
+  /* [FIX #3] del にエラーハンドリングを追加 */
   const del = useCallback(id => {
-    db.collection("posts").doc(String(id)).delete();
-  },[]);
+    db.collection("posts").doc(String(id))
+      .delete()
+      .catch(err => showError("削除に失敗しました: " + err.message));
+  },[showError]);
 
+  /* [FIX #2] id を addPost 側で一元生成。AddModal から id を受け取らない */
+  /* [FIX #3] エラーハンドリングを追加 */
   const addPost = useCallback(data => {
     const docId = uid();
-    db.collection("posts").doc(docId).set({...data, id: docId});
-    setShowAdd(false);
-  },[]);
+    db.collection("posts").doc(docId)
+      .set({...data, id: docId})
+      .then(() => setShowAdd(false))
+      .catch(err => showError("投稿の追加に失敗しました: " + err.message));
+  },[showError]);
 
-  /* members 操作 → Firestore に書く */
+  /* [FIX #3] members/cap 操作もエラーハンドリング追加 */
   const handleAddMember = useCallback(name => {
-    const next = [...members, name];
+    const next    = [...members, name];
     const nextCap = {...capData, [name]: "普通"};
-    db.collection("appConfig").doc("main").update({members: next, capData: nextCap});
-  },[members, capData]);
+    db.collection("appConfig").doc("main")
+      .update({members: next, capData: nextCap})
+      .catch(err => showError("メンバーの追加に失敗しました: " + err.message));
+  },[members, capData, showError]);
 
   const handleRemoveMember = useCallback(idx => {
     const removed = members[idx];
     const next    = members.filter((_,i)=>i!==idx);
     const nextCap = {...capData};
     delete nextCap[removed];
-    db.collection("appConfig").doc("main").update({members: next, capData: nextCap});
-  },[members, capData]);
+    db.collection("appConfig").doc("main")
+      .update({members: next, capData: nextCap})
+      .catch(err => showError("メンバーの削除に失敗しました: " + err.message));
+  },[members, capData, showError]);
 
-  /* capData 操作 → Firestore に書く */
   const handleSetCap = useCallback((member, cap) => {
-    db.collection("appConfig").doc("main").update({[`capData.${member}`]: cap});
-  },[]);
+    db.collection("appConfig").doc("main")
+      .update({[`capData.${member}`]: cap})
+      .catch(err => showError("キャパの更新に失敗しました: " + err.message));
+  },[showError]);
 
   /* ── Render guards ── */
   if(user === undefined) return <LoadingScreen message="AUTHENTICATING..."/>;
@@ -985,7 +1056,6 @@ function App(){
             </div>
           </div>
 
-          {/* ── ユーザー表示 ── */}
           {!isMobile&&user&&(
             <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:"#EDE7D9",border:"1px solid #C4B89A",borderRadius:1}}>
               {user.photoURL&&<img src={user.photoURL} style={{width:16,height:16,borderRadius:"50%",border:"1px solid #C4B89A"}} alt=""/>}
@@ -1059,8 +1129,6 @@ function App(){
           <span style={{marginLeft:"auto",fontSize:9,fontFamily:"'DM Mono',monospace",color:"#8A8070",flexShrink:0}}>
             {filtered.length}/{posts.length}
           </span>
-
-          {/* ── リアルタイム同期バッジ ── */}
           <span style={{display:"flex",alignItems:"center",gap:4,fontSize:8,fontFamily:"'DM Mono',monospace",color:"#1A7A3C",flexShrink:0}}>
             <span style={{width:5,height:5,borderRadius:"50%",background:"#2AAF5C",display:"inline-block",animation:"pulse 2s ease-in-out infinite"}}/>
             LIVE
@@ -1080,6 +1148,9 @@ function App(){
       {showAdd     && <AddModal onAdd={addPost} onClose={()=>setShowAdd(false)} members={members}/>}
       {showMembers && <MemberManager members={members} onAdd={handleAddMember} onRemove={handleRemoveMember} onClose={()=>setShowMembers(false)}/>}
       {showNav     && <NavSheet view={view} setView={setView} onClose={()=>setShowNav(false)}/>}
+
+      {/* [FIX #3] エラートースト */}
+      <ErrorToast msg={toastMsg} onDismiss={()=>setToastMsg(null)}/>
     </div>
   );
 }
